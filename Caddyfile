@@ -1,0 +1,19 @@
+{
+	# Global Caddy options
+	auto_https off
+	admin off
+}
+
+:8080 {
+	# Reverse proxy to your Go application
+	reverse_proxy localhost:9000
+
+	# Basic logging
+	log {
+		output stdout
+		format console
+	}
+
+	# Enable compression
+	encode gzip
+}

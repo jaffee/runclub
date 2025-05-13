@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Run Club - Season Management</h1>
+        <div class="user-info">
+            <p>Logged in as: <span>{{.User}}</span> ({{.Role}})</p>
+            <a href="/logout" class="button">Logout</a>
+        </div>
+    </header>
+
+    <nav>
+        <ul>
+            <li><a href="/">Home</a></li>
+            {{if eq .Role "admin"}}
+            <li><a href="/register">Register Runner</a></li>
+            <li><a href="/seasons" class="active">Manage Seasons</a></li>
+            {{end}}
+            <li><a href="/scan">Scan QR Code</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <section>
+            <h2>Current Active Season</h2>
+            {{if .ActiveSeason}}
+                <div class="season current">
+                    <h3>{{.ActiveSeason.Name}}</h3>
+                    <p>Created on: {{.ActiveSeason.CreatedAt.Format "Jan 02, 2006"}}</p>
+                    <p class="active-badge">ACTIVE</p>
+                </div>
+            {{else}}
+                <p>No active season. Please create or activate a season below.</p>
+            {{end}}
+        </section>
+
+        <section>
+            <h2>Create New Season</h2>
+            <form action="/seasons" method="POST" class="register-form">
+                <div class="form-group">
+                    <label for="name">Season Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="is_active">Make Active:</label>
+                    <input type="checkbox" id="is_active" name="is_active" value="true">
+                </div>
+                <button type="submit" class="button">Create Season</button>
+            </form>
+        </section>
+
+        <section>
+            <h2>All Seasons</h2>
+            {{if .Seasons}}
+                <div class="seasons-list">
+                    {{range .Seasons}}
+                    <div class="season {{if .IsActive}}current{{end}}">
+                        <h3>{{.Name}}</h3>
+                        <p>Created on: {{.CreatedAt.Format "Jan 02, 2006"}}</p>
+                        {{if .IsActive}}
+                            <p class="active-badge">ACTIVE</p>
+                        {{else}}
+                            <form action="/seasons/activate" method="POST">
+                                <input type="hidden" name="id" value="{{.ID}}">
+                                <button type="submit" class="button">Activate</button>
+                            </form>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+            {{else}}
+                <p>No seasons found.</p>
+            {{end}}
+        </section>
+
+        <section>
+            <h2>Statistics</h2>
+            {{if .Seasons}}
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th>Season</th>
+                            <th>Runners</th>
+                            <th>Total Scans</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .SeasonStats}}
+                        <tr>
+                            <td>{{.SeasonName}}</td>
+                            <td>{{.RunnerCount}}</td>
+                            <td>{{.ScanCount}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            {{else}}
+                <p>No season statistics available.</p>
+            {{end}}
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Run Club</p>
+    </footer>
+</body>
+</html>

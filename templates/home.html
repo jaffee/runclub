@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <h1>Run Club</h1>
+
+        {{ if .ActiveSeason }}
+        <div class="season-banner">
+            <p>Active Season: <strong>{{ .ActiveSeason.Name }}</strong></p>
+        </div>
+        {{ else }}
+        <div class="season-banner error">
+            <p>No active season. {{ if eq .Role "admin" }}Please create and activate a season.{{ else }}Please contact an administrator.{{ end }}</p>
+        </div>
+        {{ end }}
+
+        <div class="nav-container">
+            <div class="nav-item">
+                <a href="/scan" class="button {{ if eq .Role "viewer" }}disabled{{ end }}">
+                    <h2>Scan Runner</h2>
+                    <p>Use your device's camera to scan a runner's QR code</p>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="/register" class="button {{ if ne .Role "admin" }}disabled{{ end }}">
+                    <h2>Register Runner</h2>
+                    <p>Register a new participant for Run Club</p>
+                </a>
+            </div>
+            {{ if eq .Role "admin" }}
+            <div class="nav-item">
+                <a href="/seasons" class="button">
+                    <h2>Manage Seasons</h2>
+                    <p>Create, view, and manage running seasons</p>
+                </a>
+            </div>
+            {{ end }}
+        </div>
+    </div>
+</body>
+</html>

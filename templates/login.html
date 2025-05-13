@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Run Club</h1>
+        <div class="login-container">
+            <h2>Login</h2>
+            <form id="login-form" action="/login" method="post">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="submit-btn">Login</button>
+                </div>
+            </form>
+            <div class="login-help">
+                <h3>Available Users:</h3>
+                <ul>
+                    <li><strong>admin</strong> - Full access to all features</li>
+                    <li><strong>scanner</strong> - Access to scanning features only</li>
+                    <li><strong>viewer</strong> - Access to viewing data only</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

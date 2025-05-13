@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <div class="header">
+            <h1>Registration Successful</h1>
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+        <div class="registration-success">
+            <div class="success-icon">✓</div>
+            <h2>Thank you for registering!</h2>
+            <p>Your runner has been successfully registered for Run Club. Below is their QR code and registration details.</p>
+            
+            <div class="qr-code-container">
+                <img id="qrcode" class="qr-code" alt="QR Code">
+            </div>
+            
+            <div class="registration-details">
+                <h3>Registration Details</h3>
+                {{ with .Registration }}
+                <p><strong>Runner ID:</strong> <span class="student-id">{{ .ID }}</span></p>
+                <p><strong>Name:</strong> {{ .FirstName }} {{ .LastName }}</p>
+                <p><strong>Grade:</strong> {{ .Grade }}</p>
+                <p><strong>Teacher:</strong> {{ .Teacher }}</p>
+                <p><strong>Parent Contact:</strong> {{ .ParentContactNumber }}</p>
+                {{ if .BackupContactNumber }}
+                <p><strong>Backup Contact:</strong> {{ .BackupContactNumber }}</p>
+                {{ end }}
+                <p><strong>Parent Email:</strong> {{ .ParentEmail }}</p>
+                <p><strong>Registered:</strong> {{ .RegisteredAt.Format "Jan 02, 2006 at 15:04" }}</p>
+                {{ end }}
+            </div>
+            
+            <p>Please take a screenshot of this QR code or print it for your runner to use during Run Club.</p>
+            <p><a href="/register" class="back-link">Register another runner</a></p>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const studentId = "{{ .Registration.ID }}";
+            const qrCodeElement = document.getElementById('qrcode');
+            
+            // Generate QR code
+            QRCode.toDataURL(studentId, { 
+                width: 256,
+                height: 256,
+                margin: 1,
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                }
+            }, (err, url) => {
+                if (err) {
+                    console.error("Error generating QR code:", err);
+                    return;
+                }
+                qrCodeElement.src = url;
+            });
+        });
+    </script>
+</body>
+</html>
