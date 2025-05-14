@@ -279,10 +279,10 @@ func (db *Database) SaveRegistration(reg *Registration) error {
 
 	_, err := db.db.Exec(
 		`INSERT INTO registrations (
-			id, season_id, first_name, last_name, grade, teacher, 
+			id, season_id, first_name, last_name, grade, teacher, gender,
 			parent_contact_number, backup_contact_number, parent_email, registered_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		reg.ID, reg.SeasonID, reg.FirstName, reg.LastName, reg.Grade, reg.Teacher,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		reg.ID, reg.SeasonID, reg.FirstName, reg.LastName, reg.Grade, reg.Teacher, reg.Gender,
 		reg.ParentContactNumber, reg.BackupContactNumber, reg.ParentEmail, reg.RegisteredAt,
 	)
 
@@ -300,16 +300,17 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 
 	reg := &Registration{}
 	var seasonID sql.NullString
+	var genderNull sql.NullString
 
 	// Query registration with season data
 	err := db.db.QueryRow(
-		`SELECT 
-			r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, 
+		`SELECT
+			r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
 			r.parent_contact_number, r.backup_contact_number, r.parent_email, r.registered_at
 		FROM registrations r WHERE r.id = ?`,
 		id,
 	).Scan(
-		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher,
+		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
 		&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
 	)
 
@@ -321,14 +322,21 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 		return nil, false, fmt.Errorf("failed to get registration: %w", err)
 	}
 
+	// Handle NULL gender value
+	if genderNull.Valid {
+		reg.Gender = genderNull.String
+	} else {
+		reg.Gender = "" // Use empty string for NULL gender
+	}
+
 	// Set season ID if not null
 	if seasonID.Valid {
-		reg.SeasonID = seasonID.String
+		reg.SeasonID = &seasonID.String
 
 		// Fetch the associated season
 		season := &Season{}
 		err = db.db.QueryRow(
-			`SELECT id, name, is_active, created_at 
+			`SELECT id, name, is_active, created_at
 			FROM seasons WHERE id = ?`,
 			reg.SeasonID,
 		).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt)
@@ -350,8 +358,8 @@ func (db *Database) GetAllRegistrations(seasonID string) ([]*Registration, error
 	db.mutex.RLock()
 	defer db.mutex.RUnlock()
 
-	query := `SELECT 
-		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, 
+	query := `SELECT
+		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
 		r.parent_contact_number, r.backup_contact_number, r.parent_email, r.registered_at,
 		s.id, s.name, s.is_active, s.created_at
 	FROM registrations r
@@ -380,14 +388,22 @@ func (db *Database) GetAllRegistrations(seasonID string) ([]*Registration, error
 		var seasonIDNull, seasonNameNull sql.NullString
 		var seasonIsActiveNull sql.NullBool
 		var seasonCreatedAtNull sql.NullTime
+		var genderNull sql.NullString
 
 		err := rows.Scan(
-			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher,
+			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
 			&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
 			&seasonIDNull, &seasonNameNull, &seasonIsActiveNull, &seasonCreatedAtNull,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan registration row: %w", err)
+		}
+
+		// Handle NULL gender value
+		if genderNull.Valid {
+			reg.Gender = genderNull.String
+		} else {
+			reg.Gender = "" // Use empty string for NULL gender
 		}
 
 		// Add season info if available
@@ -409,6 +425,121 @@ func (db *Database) GetAllRegistrations(seasonID string) ([]*Registration, error
 	return regs, nil
 }
 
+// GetFilteredRegistrations returns registrations with filtering, pagination, and search functionality
+func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page, perPage int) ([]*Registration, int, error) {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	// Calculate offset
+	offset := (page - 1) * perPage
+
+	// Base query
+	query := `SELECT
+		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
+		r.parent_contact_number, r.backup_contact_number, r.parent_email, r.registered_at,
+		s.id, s.name, s.is_active, s.created_at
+	FROM registrations r
+	INNER JOIN seasons s ON r.season_id = s.id`
+
+	// Count query for pagination
+	countQuery := `SELECT COUNT(*) FROM registrations r`
+
+	// Build where clause
+	whereClause := ""
+	args := []interface{}{}
+	countArgs := []interface{}{}
+
+	// Add season filter if provided
+	if seasonID != "" {
+		whereClause = " WHERE r.season_id = ?"
+		args = append(args, seasonID)
+		countArgs = append(countArgs, seasonID)
+	}
+
+	// Add search filter if provided
+	if searchQuery != "" {
+		searchTerm := "%" + searchQuery + "%"
+		if whereClause == "" {
+			whereClause = " WHERE"
+		} else {
+			whereClause += " AND"
+		}
+		whereClause += ` (
+			r.first_name LIKE ? OR
+			r.last_name LIKE ? OR
+			r.grade LIKE ? OR
+			r.teacher LIKE ? OR
+			r.parent_email LIKE ?
+		)`
+		args = append(args, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm)
+		countArgs = append(countArgs, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm)
+	}
+
+	// Complete queries
+	query += whereClause + " ORDER BY r.registered_at DESC LIMIT ? OFFSET ?"
+	countQuery += whereClause
+
+	// Add pagination parameters
+	args = append(args, perPage, offset)
+
+	// Get total count
+	var totalCount int
+	err := db.db.QueryRow(countQuery, countArgs...).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get total count: %w", err)
+	}
+
+	// Get registrations
+	rows, err := db.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query registrations: %w", err)
+	}
+	defer rows.Close()
+
+	var regs []*Registration
+	for rows.Next() {
+		reg := &Registration{}
+		var season Season
+		var seasonIDNull, seasonNameNull sql.NullString
+		var seasonIsActiveNull sql.NullBool
+		var seasonCreatedAtNull sql.NullTime
+		var genderNull sql.NullString
+
+		err := rows.Scan(
+			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
+			&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
+			&seasonIDNull, &seasonNameNull, &seasonIsActiveNull, &seasonCreatedAtNull,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan registration row: %w", err)
+		}
+
+		// Handle NULL gender value
+		if genderNull.Valid {
+			reg.Gender = genderNull.String
+		} else {
+			reg.Gender = "" // Use empty string for NULL gender
+		}
+
+		// Add season info if available
+		if seasonIDNull.Valid && seasonNameNull.Valid {
+			season.ID = seasonIDNull.String
+			season.Name = seasonNameNull.String
+			season.IsActive = seasonIsActiveNull.Bool
+			season.CreatedAt = seasonCreatedAtNull.Time
+			reg.Season = &season
+		}
+
+		regs = append(regs, reg)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("error iterating registration rows: %w", err)
+	}
+
+	return regs, totalCount, nil
+}
+
 // RecordScan records a new scan in the database
 func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registration, error) {
 	db.mutex.Lock()
@@ -428,15 +559,16 @@ func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registratio
 	// Check if the registration exists and get its season ID
 	reg := &Registration{}
 	var seasonID sql.NullString
+	var genderNull sql.NullString
 
 	err = tx.QueryRow(
-		`SELECT 
-			id, season_id, first_name, last_name, grade, teacher, 
+		`SELECT
+			id, season_id, first_name, last_name, grade, teacher, gender,
 			parent_contact_number, backup_contact_number, parent_email, registered_at
 		FROM registrations WHERE id = ?`,
 		registrationID,
 	).Scan(
-		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher,
+		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
 		&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
 	)
 
@@ -448,9 +580,16 @@ func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registratio
 		return nil, nil, fmt.Errorf("failed to get registration: %w", err)
 	}
 
+	// Handle NULL gender value
+	if genderNull.Valid {
+		reg.Gender = genderNull.String
+	} else {
+		reg.Gender = "" // Use empty string for NULL gender
+	}
+
 	// Set the season ID for the registration
 	if seasonID.Valid {
-		reg.SeasonID = seasonID.String
+		reg.SeasonID = &seasonID.String
 
 		// Get the associated season if it exists
 		season := &Season{}
@@ -493,7 +632,7 @@ func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registratio
 	scan := &ScanRecord{
 		ID:             scanID,
 		RegistrationID: registrationID,
-		SeasonID:       reg.SeasonID,
+		SeasonID:       *reg.SeasonID,
 		ScannedAt:      now,
 		Season:         reg.Season,
 	}

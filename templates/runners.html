@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .runners-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .runners-table th, .runners-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .runners-table th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+        }
+        
+        .runners-table tr:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .filter-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-bar .form-group {
+            margin-bottom: 0;
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .filter-bar .submit-btn {
+            align-self: flex-end;
+            height: 41px;
+            flex: 0 0 auto;
+        }
+        
+        .pagination {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .pagination li {
+            margin: 0 5px;
+        }
+        
+        .pagination a {
+            display: block;
+            padding: 8px 12px;
+            text-decoration: none;
+            border: 1px solid #ddd;
+            color: #333;
+            border-radius: 4px;
+        }
+        
+        .pagination a.active {
+            background-color: #2c3e50;
+            color: white;
+            border-color: #2c3e50;
+        }
+        
+        .pagination a:hover:not(.active),
+        .pagination button.page-link:hover:not(.active) {
+            background-color: #f5f5f5;
+        }
+        
+        .pagination button.page-link {
+            background: none;
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: #333;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: inherit;
+        }
+        
+        .pagination button.active {
+            background-color: #2c3e50;
+            color: white;
+            border-color: #2c3e50;
+        }
+        
+        .export-link {
+            display: inline-block;
+            margin-top: 15px;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background-color: #27ae60;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            font-family: inherit;
+            font-size: inherit;
+            cursor: pointer;
+        }
+        
+        .export-link:hover {
+            background-color: #219955;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <div class="header">
+            <h1>Registered Runners</h1>
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+
+        <div class="nav-container">
+            <div class="nav-item">
+                <a href="/" class="button">Home</a>
+            </div>
+            {{if eq .Role "admin"}}
+            <div class="nav-item">
+                <a href="/register" class="button">Register Runner</a>
+            </div>
+            <div class="nav-item">
+                <a href="/seasons" class="button">Manage Seasons</a>
+            </div>
+            <div class="nav-item">
+                <a href="/csv-upload" class="button">Bulk Register</a>
+            </div>
+            <div class="nav-item">
+                <a href="/runners" class="button active">View Runners</a>
+            </div>
+            {{end}}
+            <div class="nav-item">
+                <a href="/scan" class="button">Scan QR Code</a>
+            </div>
+        </div>
+
+        <div class="form-container">
+            <div class="filter-bar">
+                <form action="/runners" method="GET" class="filter-form">
+                    <div class="filter-bar">
+                        <div class="form-group">
+                            <label for="season">Season:</label>
+                            <select id="season" name="season_id">
+                                <option value="">All Seasons</option>
+                                {{range .Seasons}}
+                                <option value="{{.ID}}" {{if eq .ID $.SelectedSeasonID}}selected{{end}}>{{.Name}}{{if .IsActive}} (Active){{end}}</option>
+                                {{end}}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="search">Search:</label>
+                            <input type="text" id="search" name="search" value="{{.SearchQuery}}" placeholder="Name, grade, teacher...">
+                        </div>
+                        <button type="submit" class="submit-btn">Filter</button>
+                    </div>
+                </form>
+            </div>
+
+            {{if .ActiveSeason}}
+            <form method="get" action="/runners/export" style="display: inline;">
+                {{if .SelectedSeasonID}}<input type="hidden" name="season_id" value="{{.SelectedSeasonID}}">{{end}}
+                {{if .SearchQuery}}<input type="hidden" name="search" value="{{.SearchQuery}}">{{end}}
+                <button type="submit" class="export-link">Export to CSV</button>
+            </form>
+            {{end}}
+
+            {{if .Registrations}}
+                <table class="runners-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Grade</th>
+                            <th>Teacher</th>
+                            <th>Gender</th>
+                            <th>Parent Contact</th>
+                            <th>Parent Email</th>
+                            <th>Season</th>
+                            <th>Registered On</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Registrations}}
+                        <tr>
+                            <td title="{{.ID}}">{{slice .ID 0 8}}...</td>
+                            <td>{{.FirstName}}</td>
+                            <td>{{.LastName}}</td>
+                            <td>{{.Grade}}</td>
+                            <td>{{.Teacher}}</td>
+                            <td>{{.Gender}}</td>
+                            <td>{{.ParentContactNumber}}</td>
+                            <td>{{.ParentEmail}}</td>
+                            <td>{{if .Season}}{{.Season.Name}}{{else}}N/A{{end}}</td>
+                            <td>{{.RegisteredAt.Format "Jan 02, 2006"}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+
+                {{if .TotalPages}}
+                <ul class="pagination">
+                    {{if gt .CurrentPage 1}}
+                    <li>
+                        <form method="get" action="/runners">
+                            <input type="hidden" name="page" value="{{subtract .CurrentPage 1}}">
+                            {{if .SelectedSeasonID}}<input type="hidden" name="season_id" value="{{.SelectedSeasonID}}">{{end}}
+                            {{if .SearchQuery}}<input type="hidden" name="search" value="{{.SearchQuery}}">{{end}}
+                            <button type="submit" class="page-link">Previous</button>
+                        </form>
+                    </li>
+                    {{end}}
+                    
+                    {{range $i := sequence 1 .TotalPages}}
+                    <li>
+                        <form method="get" action="/runners">
+                            <input type="hidden" name="page" value="{{$i}}">
+                            {{if $.SelectedSeasonID}}<input type="hidden" name="season_id" value="{{$.SelectedSeasonID}}">{{end}}
+                            {{if $.SearchQuery}}<input type="hidden" name="search" value="{{$.SearchQuery}}">{{end}}
+                            <button type="submit" class="page-link {{if eq $i $.CurrentPage}}active{{end}}">{{$i}}</button>
+                        </form>
+                    </li>
+                    {{end}}
+                    
+                    {{if lt .CurrentPage .TotalPages}}
+                    <li>
+                        <form method="get" action="/runners">
+                            <input type="hidden" name="page" value="{{add .CurrentPage 1}}">
+                            {{if .SelectedSeasonID}}<input type="hidden" name="season_id" value="{{.SelectedSeasonID}}">{{end}}
+                            {{if .SearchQuery}}<input type="hidden" name="search" value="{{.SearchQuery}}">{{end}}
+                            <button type="submit" class="page-link">Next</button>
+                        </form>
+                    </li>
+                    {{end}}
+                </ul>
+                {{end}}
+            {{else}}
+                <p>No registered runners found.</p>
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>

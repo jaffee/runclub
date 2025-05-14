@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <div class="header">
+            <h1>Bulk Register Runners</h1>
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+
+        <div class="nav-container">
+            <div class="nav-item">
+                <a href="/" class="button">Home</a>
+            </div>
+            {{if eq .Role "admin"}}
+            <div class="nav-item">
+                <a href="/register" class="button">Register Runner</a>
+            </div>
+            <div class="nav-item">
+                <a href="/seasons" class="button">Manage Seasons</a>
+            </div>
+            <div class="nav-item">
+                <a href="/csv-upload" class="button active">Bulk Register</a>
+            </div>
+            <div class="nav-item">
+                <a href="/runners" class="button">View Runners</a>
+            </div>
+            {{end}}
+            <div class="nav-item">
+                <a href="/scan" class="button">Scan QR Code</a>
+            </div>
+        </div>
+        <div class="form-container">
+            <h2>CSV Upload</h2>
+            {{ if .ActiveSeason }}
+            <p>Upload a CSV file to register multiple runners for the <strong>{{ .ActiveSeason.Name }}</strong> season.</p>
+            
+            <div class="csv-format-info">
+                <h3>CSV Format</h3>
+                <p>Your CSV file should have the following columns in this order:</p>
+                <pre>FirstName,LastName,Grade,Teacher,Gender,ParentContactNumber,BackupContactNumber,ParentEmail</pre>
+                <p>Example:</p>
+                <pre>John,Doe,3,Mrs. Smith,Male,555-123-4567,555-987-6543,parent@example.com</pre>
+                <p>Notes:</p>
+                <ul>
+                    <li>All fields except BackupContactNumber are required</li>
+                    <li>Grade should be K, 1, 2, 3, 4, or 5</li>
+                    <li>Gender should be Male, Female, Other, or Prefer not to say</li>
+                </ul>
+                <a href="/static/template.csv" download="runner_template.csv">Download CSV Template</a>
+            </div>
+
+            {{ if .Message }}
+            <div class="message {{ if .Success }}success{{ else }}error{{ end }}">
+                <p>{{ .Message }}</p>
+                {{ if .SuccessCount }}
+                <p>Successfully registered: {{ .SuccessCount }} runners</p>
+                {{ end }}
+                {{ if .ErrorCount }}
+                <p>Failed to register: {{ .ErrorCount }} runners</p>
+                {{ end }}
+                {{ if .Errors }}
+                <ul class="error-list">
+                    {{ range .Errors }}
+                    <li>{{ . }}</li>
+                    {{ end }}
+                </ul>
+                {{ end }}
+            </div>
+            {{ end }}
+            
+            <form id="csv-upload-form" action="/csv-upload" method="post" enctype="multipart/form-data" {{ if not .ActiveSeason }}disabled{{ end }}>
+                <div class="form-group">
+                    <label for="csv-file">Select CSV File:</label>
+                    <input type="file" id="csv-file" name="csv-file" accept=".csv" required>
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit" class="submit-btn">Upload and Register</button>
+                </div>
+            </form>
+            {{ else }}
+            <p class="error-message">No active season. Please create and activate a season before registering runners.</p>
+            {{ end }}
+        </div>
+    </div>
+</body>
+</html>

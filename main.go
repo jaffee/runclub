@@ -1,14 +1,20 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,6 +63,7 @@ type Registration struct {
 	LastName            string    `json:"lastName"`
 	Grade               string    `json:"grade"`
 	Teacher             string    `json:"teacher"`
+	Gender              string    `json:"gender"`
 	ParentContactNumber string    `json:"parentContactNumber"`
 	BackupContactNumber string    `json:"backupContactNumber"`
 	ParentEmail         string    `json:"parentEmail"`
@@ -84,14 +91,25 @@ type ScanResult struct {
 
 // PageData holds data to be passed to templates
 type PageData struct {
-	Title        string
-	Registration *Registration
-	ScanResult   *ScanResult
-	User         string
-	Role         string
-	ActiveSeason *Season
-	Seasons      []*Season
-	SeasonStats  []SeasonStat
+	Title            string
+	Registration     *Registration
+	ScanResult       *ScanResult
+	User             string
+	Role             string
+	ActiveSeason     *Season
+	Seasons          []*Season
+	SeasonStats      []SeasonStat
+	Success          bool
+	Message          string
+	SuccessCount     int
+	ErrorCount       int
+	Errors           []string
+	Registrations    []*Registration
+	SelectedSeasonID string
+	SearchQuery      string
+	CurrentPage      int
+	TotalPages       int
+	TotalRunners     int
 }
 
 // SeasonStat represents statistics for a season
@@ -148,6 +166,9 @@ func main() {
 	http.HandleFunc("/success", authMiddleware(successHandler, []string{RoleAdmin}))
 	http.HandleFunc("/seasons", authMiddleware(seasonsHandler, []string{RoleAdmin}))
 	http.HandleFunc("/seasons/activate", authMiddleware(activateSeasonHandler, []string{RoleAdmin}))
+	http.HandleFunc("/csv-upload", authMiddleware(csvUploadHandler, []string{RoleAdmin}))
+	http.HandleFunc("/runners", authMiddleware(runnersHandler, []string{RoleAdmin}))
+	http.HandleFunc("/runners/export", authMiddleware(runnersExportHandler, []string{RoleAdmin}))
 
 	// API endpoints
 	http.HandleFunc("/api/registrations", authMiddleware(apiRegistrationsHandler, []string{RoleAdmin}))
@@ -172,10 +193,48 @@ func main() {
 func loadTemplates() {
 	templates = make(map[string]*template.Template)
 
+	// Define template functions
+	funcMap := template.FuncMap{
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"subtract": func(a, b int) int {
+			return a - b
+		},
+		"multiply": func(a, b int) int {
+			return a * b
+		},
+		"divide": func(a, b int) int {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
+		"sequence": func(start, end int) []int {
+			var seq []int
+			for i := start; i <= end; i++ {
+				seq = append(seq, i)
+			}
+			return seq
+		},
+		"slice": func(s string, start, end int) string {
+			if start >= len(s) {
+				return ""
+			}
+			if end > len(s) {
+				end = len(s)
+			}
+			return s[start:end]
+		},
+		"urlquery": func(s string) string {
+			return url.QueryEscape(s)
+		},
+	}
+
 	// Load each template
-	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons"}
+	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "csv_upload", "runners"}
 	for _, name := range templateFiles {
-		tmpl, err := template.ParseFiles(fmt.Sprintf("templates/%s.html", name))
+		tmpl, err := template.New(name + ".html").Funcs(funcMap).ParseFiles(fmt.Sprintf("templates/%s.html", name))
 		if err != nil {
 			log.Fatalf("Error parsing template %s: %v", name, err)
 		}
@@ -186,8 +245,6 @@ func loadTemplates() {
 // authMiddleware checks if the user is authenticated and has the required role
 func authMiddleware(handler http.HandlerFunc, roles []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		handler(w, r)
-		return
 		session, _ := store.Get(r, "run-club-session")
 
 		// Check if user is authenticated
@@ -384,11 +441,12 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		// Create a new registration
 		reg := &Registration{
 			ID:                  uuid.New().String(),
-			SeasonID:            activeSeason.ID,
+			SeasonID:            &activeSeason.ID,
 			FirstName:           r.FormValue("firstName"),
 			LastName:            r.FormValue("lastName"),
 			Grade:               r.FormValue("grade"),
 			Teacher:             r.FormValue("teacher"),
+			Gender:              r.FormValue("gender"),
 			ParentContactNumber: r.FormValue("parentContactNumber"),
 			BackupContactNumber: r.FormValue("backupContactNumber"),
 			ParentEmail:         r.FormValue("parentEmail"),
@@ -699,6 +757,347 @@ func sendJSONResponse(w http.ResponseWriter, data interface{}, statusCode int) {
 	if err != nil {
 		log.Printf("Error encoding JSON response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+func csvUploadHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "run-club-session")
+	username := session.Values["username"].(string)
+	role := session.Values["role"].(string)
+
+	// Get active season
+	activeSeason, hasActiveSeason, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	// Create base page data
+	data := PageData{
+		Title: "Run Club - Bulk Register",
+		User:  username,
+		Role:  role,
+	}
+
+	// Add active season data if available
+	if hasActiveSeason {
+		data.ActiveSeason = activeSeason
+	}
+
+	// For GET requests, just show the form
+	if r.Method == http.MethodGet {
+		renderTemplate(w, "csv_upload", data)
+		return
+	}
+
+	// For POST requests, process the CSV file
+	if r.Method == http.MethodPost {
+		// Check if there's an active season
+		if !hasActiveSeason {
+			data.Success = false
+			data.Message = "Cannot register runners without an active season"
+			renderTemplate(w, "csv_upload", data)
+			return
+		}
+
+		// Parse the multipart form to get the file
+		err := r.ParseMultipartForm(10 << 20) // Max 10MB
+		if err != nil {
+			data.Success = false
+			data.Message = "Error parsing form"
+			renderTemplate(w, "csv_upload", data)
+			return
+		}
+
+		// Get the file from the form
+		file, header, err := r.FormFile("csv-file")
+		if err != nil {
+			data.Success = false
+			data.Message = "Error retrieving file from form"
+			renderTemplate(w, "csv_upload", data)
+			return
+		}
+		defer file.Close()
+
+		// Check if the file is a CSV
+		if !strings.HasSuffix(header.Filename, ".csv") {
+			data.Success = false
+			data.Message = "Uploaded file is not a CSV"
+			renderTemplate(w, "csv_upload", data)
+			return
+		}
+
+		// Process the CSV file and register runners
+		successCount, errorCount, errors := processCsvFile(file, activeSeason)
+
+		// Prepare data for the template
+		data.Success = errorCount == 0
+		data.SuccessCount = successCount
+		data.ErrorCount = errorCount
+		data.Errors = errors
+
+		if data.Success {
+			data.Message = "Successfully registered all runners!"
+		} else {
+			if successCount > 0 {
+				data.Message = "Partially successful registration. See errors below."
+			} else {
+				data.Message = "Failed to register runners. See errors below."
+			}
+		}
+
+		renderTemplate(w, "csv_upload", data)
+		return
+	}
+
+	// Method not allowed for other HTTP methods
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// processCsvFile processes a CSV file and registers the runners
+func processCsvFile(file io.Reader, season *Season) (successCount, errorCount int, errors []string) {
+	// Create a new CSV reader
+	reader := csv.NewReader(file)
+
+	// Read header row first to validate
+	header, err := reader.Read()
+	if err != nil {
+		return 0, 1, []string{"Error reading CSV header: " + err.Error()}
+	}
+
+	// Check for expected headers
+	expectedHeaders := []string{"FirstName", "LastName", "Grade", "Teacher", "Gender", "ParentContactNumber", "BackupContactNumber", "ParentEmail"}
+	if !reflect.DeepEqual(header, expectedHeaders) {
+		return 0, 1, []string{"CSV headers do not match expected format. Please use the template provided."}
+	}
+
+	// Process rows
+	lineNum := 1 // Start at line 1 (header row)
+	for {
+		lineNum++
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Error reading line %d: %v", lineNum, err))
+			errorCount++
+			continue
+		}
+
+		// Skip empty rows
+		if len(row) == 0 || (len(row) == 1 && row[0] == "") {
+			continue
+		}
+
+		// Validate row length
+		if len(row) != len(expectedHeaders) {
+			errors = append(errors, fmt.Sprintf("Line %d: Wrong number of columns", lineNum))
+			errorCount++
+			continue
+		}
+
+		// Extract values
+		firstName := strings.TrimSpace(row[0])
+		lastName := strings.TrimSpace(row[1])
+		grade := strings.TrimSpace(row[2])
+		teacher := strings.TrimSpace(row[3])
+		gender := strings.TrimSpace(row[4])
+		parentContactNumber := strings.TrimSpace(row[5])
+		backupContactNumber := strings.TrimSpace(row[6])
+		parentEmail := strings.TrimSpace(row[7])
+
+		// Validate required fields
+		if firstName == "" || lastName == "" || grade == "" || teacher == "" || gender == "" || parentContactNumber == "" || parentEmail == "" {
+			errors = append(errors, fmt.Sprintf("Line %d: Missing required field(s)", lineNum))
+			errorCount++
+			continue
+		}
+
+		// Validate grade
+		validGrades := map[string]bool{"K": true, "1": true, "2": true, "3": true, "4": true, "5": true}
+		if !validGrades[grade] {
+			errors = append(errors, fmt.Sprintf("Line %d: Invalid grade '%s'", lineNum, grade))
+			errorCount++
+			continue
+		}
+
+		// Validate gender
+		validGenders := map[string]bool{"Male": true, "Female": true, "Other": true, "Prefer not to say": true}
+		if !validGenders[gender] {
+			errors = append(errors, fmt.Sprintf("Line %d: Invalid gender '%s'", lineNum, gender))
+			errorCount++
+			continue
+		}
+
+		// Create registration
+		reg := &Registration{
+			ID:                  uuid.New().String(),
+			SeasonID:            &season.ID,
+			FirstName:           firstName,
+			LastName:            lastName,
+			Grade:               grade,
+			Teacher:             teacher,
+			Gender:              gender,
+			ParentContactNumber: parentContactNumber,
+			BackupContactNumber: backupContactNumber,
+			ParentEmail:         parentEmail,
+			RegisteredAt:        time.Now(),
+			Season:              season,
+		}
+
+		// Save to database
+		err = database.SaveRegistration(reg)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Line %d: Error saving to database: %v", lineNum, err))
+			errorCount++
+			continue
+		}
+
+		successCount++
+	}
+
+	return successCount, errorCount, errors
+}
+
+func runnersHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "run-club-session")
+	username := session.Values["username"].(string)
+	role := session.Values["role"].(string)
+
+	// Get all seasons
+	seasons, err := database.GetAllSeasons()
+	if err != nil {
+		log.Printf("Error getting seasons: %v", err)
+		http.Error(w, "Failed to retrieve seasons", http.StatusInternalServerError)
+		return
+	}
+
+	// Get active season
+	activeSeason, _, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	// Parse query parameters
+	seasonID := r.URL.Query().Get("season_id")
+	
+	// Make sure we HTML-escape the search query for template safety
+	searchQuery := template.HTMLEscapeString(r.URL.Query().Get("search"))
+	
+	pageStr := r.URL.Query().Get("page")
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	perPage := 20 // Number of runners per page
+
+	// Get filtered registrations with pagination
+	registrations, totalCount, err := database.GetFilteredRegistrations(seasonID, searchQuery, page, perPage)
+	if err != nil {
+		log.Printf("Error getting registrations: %v", err)
+		http.Error(w, "Failed to retrieve registrations", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate total pages
+	totalPages := (totalCount + perPage - 1) / perPage
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	data := PageData{
+		Title:            "Run Club - Registered Runners",
+		User:             username,
+		Role:             role,
+		Seasons:          seasons,
+		ActiveSeason:     activeSeason,
+		Registrations:    registrations,
+		SelectedSeasonID: seasonID,
+		SearchQuery:      searchQuery,
+		CurrentPage:      page,
+		TotalPages:       totalPages,
+		TotalRunners:     totalCount,
+	}
+
+	renderTemplate(w, "runners", data)
+}
+
+func runnersExportHandler(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	seasonID := r.URL.Query().Get("season_id")
+	searchQuery := template.HTMLEscapeString(r.URL.Query().Get("search"))
+
+	// Get registrations without pagination
+	registrations, err := database.GetAllRegistrations(seasonID)
+	if err != nil {
+		log.Printf("Error getting registrations: %v", err)
+		http.Error(w, "Failed to retrieve registrations", http.StatusInternalServerError)
+		return
+	}
+
+	// Filter by search query if provided
+	if searchQuery != "" {
+		searchTerm := strings.ToLower(searchQuery)
+		var filtered []*Registration
+		for _, reg := range registrations {
+			if strings.Contains(strings.ToLower(reg.FirstName), searchTerm) ||
+				strings.Contains(strings.ToLower(reg.LastName), searchTerm) ||
+				strings.Contains(strings.ToLower(reg.Grade), searchTerm) ||
+				strings.Contains(strings.ToLower(reg.Teacher), searchTerm) ||
+				strings.Contains(strings.ToLower(reg.ParentEmail), searchTerm) {
+				filtered = append(filtered, reg)
+			}
+		}
+		registrations = filtered
+	}
+
+	// Set headers for CSV download
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=runners.csv")
+
+	// Create CSV writer
+	csvWriter := csv.NewWriter(w)
+	defer csvWriter.Flush()
+
+	// Write header row
+	header := []string{
+		"ID", "First Name", "Last Name", "Grade", "Teacher", "Gender",
+		"Parent Contact", "Backup Contact", "Parent Email", "Season", "Registered On",
+	}
+	if err := csvWriter.Write(header); err != nil {
+		log.Printf("Error writing CSV header: %v", err)
+		http.Error(w, "Failed to generate CSV", http.StatusInternalServerError)
+		return
+	}
+
+	// Write data rows
+	for _, reg := range registrations {
+		seasonName := "N/A"
+		if reg.Season != nil {
+			seasonName = reg.Season.Name
+		}
+
+		row := []string{
+			reg.ID,
+			reg.FirstName,
+			reg.LastName,
+			reg.Grade,
+			reg.Teacher,
+			reg.Gender,
+			reg.ParentContactNumber,
+			reg.BackupContactNumber,
+			reg.ParentEmail,
+			seasonName,
+			reg.RegisteredAt.Format("2006-01-02"),
+		}
+
+		if err := csvWriter.Write(row); err != nil {
+			log.Printf("Error writing CSV row: %v", err)
+			http.Error(w, "Failed to generate CSV", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 

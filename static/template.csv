@@ -1,0 +1,11 @@
+FirstName,LastName,Grade,Teacher,Gender,ParentContactNumber,BackupContactNumber,ParentEmail
+John,Doe,3,Mrs. Smith,Male,555-123-4567,555-987-6543,parent@example.com
+Jane,Smith,2,Mr. Johnson,Female,555-111-2222,,parent2@example.com
+Alex,Johnson,K,Ms. Williams,Male,555-333-4444,555-444-5555,alex.parent@example.com
+Emily,Garcia,1,Mrs. Lee,Female,555-555-6666,,emily.parent@example.com
+Michael,Brown,4,Mr. Davis,Male,555-777-8888,555-888-9999,michael.parent@example.com
+Sophia,Martinez,5,Ms. Anderson,Female,555-999-0000,,sophia.parent@example.com
+Ethan,Wilson,3,Mrs. Taylor,Male,555-123-7890,555-456-7890,ethan.parent@example.com
+Olivia,Lopez,2,Mr. Thomas,Female,555-234-5678,,olivia.parent@example.com
+Noah,Hernandez,K,Ms. White,Male,555-345-6789,555-678-9012,noah.parent@example.com
+Ava,Clark,4,Mrs. Harris,Female,555-567-8901,,ava.parent@example.com

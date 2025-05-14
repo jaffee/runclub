@@ -12,6 +12,7 @@ import (
 func TestDatabaseOperations(t *testing.T) {
 	// Remove any existing test database
 	os.Remove("test_runclub.db")
+	os.Remove("runclub.db")
 
 	// Initialize database
 	db, err := NewDatabase()
@@ -21,19 +22,37 @@ func TestDatabaseOperations(t *testing.T) {
 	defer db.Close()
 	defer os.Remove("runclub.db") // Clean up after test
 
+	// Create a test season first
+	testSeason := &Season{
+		ID:        uuid.New().String(),
+		Name:      "Test Season",
+		IsActive:  true,
+		CreatedAt: time.Now(),
+	}
+
+	// Save the season
+	err = db.SaveSeason(testSeason)
+	if err != nil {
+		t.Fatalf("Failed to create test season: %v", err)
+	}
+
 	// Test registration operations
 	t.Run("Registration Operations", func(t *testing.T) {
-		// Create test registration
+		// Create test registration with the season
+		seasonID := testSeason.ID
 		reg := &Registration{
 			ID:                  uuid.New().String(),
+			SeasonID:            &seasonID,
 			FirstName:           "John",
 			LastName:            "Doe",
-			Grade:               "5th",
+			Grade:               "5",
 			Teacher:             "Mrs. Smith",
+			Gender:              "Male",
 			ParentContactNumber: "555-1234",
 			BackupContactNumber: "555-5678",
 			ParentEmail:         "parent@example.com",
 			RegisteredAt:        time.Now(),
+			Season:              testSeason,
 		}
 
 		// Save registration
@@ -56,7 +75,7 @@ func TestDatabaseOperations(t *testing.T) {
 		}
 
 		// Get all registrations
-		allRegs, err := db.GetAllRegistrations()
+		allRegs, err := db.GetAllRegistrations("")
 		if err != nil {
 			t.Fatalf("Failed to get all registrations: %v", err)
 		}
@@ -67,17 +86,21 @@ func TestDatabaseOperations(t *testing.T) {
 
 	// Test scan operations
 	t.Run("Scan Operations", func(t *testing.T) {
-		// Create test registration
+		// Create test registration with the season
+		seasonID := testSeason.ID
 		reg := &Registration{
 			ID:                  uuid.New().String(),
+			SeasonID:            &seasonID,
 			FirstName:           "Jane",
 			LastName:            "Smith",
-			Grade:               "3rd",
+			Grade:               "3",
 			Teacher:             "Mr. Johnson",
+			Gender:              "Female",
 			ParentContactNumber: "555-9876",
 			BackupContactNumber: "555-6543",
 			ParentEmail:         "parent2@example.com",
 			RegisteredAt:        time.Now(),
+			Season:              testSeason,
 		}
 
 		// Save registration
@@ -108,7 +131,7 @@ func TestDatabaseOperations(t *testing.T) {
 		}
 
 		// Get all scans
-		allScans, err := db.GetAllScans()
+		allScans, err := db.GetAllScans("")
 		if err != nil {
 			t.Fatalf("Failed to get all scans: %v", err)
 		}

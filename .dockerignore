@@ -1,0 +1,5 @@
+.git
+.gitignore
+runclub.db
+*.md
+cmd/migrate/migrate
