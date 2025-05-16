@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        /* Styles for screen viewing */
+        @media screen {
+            .screen-only {
+                display: block;
+            }
+            .badge-sheet-container {
+                max-width: 8.5in;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f9f9f9;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+            .controls {
+                margin-bottom: 20px;
+                padding: 15px;
+                background-color: #fff;
+                border-radius: 5px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+            .print-button {
+                background-color: #2c3e50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+                border-radius: 4px;
+                margin-top: 10px;
+            }
+            .print-button:hover {
+                background-color: #1a252f;
+            }
+            .page-break {
+                height: 30px;
+                background-color: #eee;
+                margin: 30px 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+        }
+
+        /* Styles for printing */
+        @media print {
+            @page {
+                size: letter;
+                margin: 0;
+            }
+            html, body {
+                margin: 0;
+                padding: 0;
+                background: white;
+                width: 8.5in;
+                height: 11in;
+            }
+            .screen-only {
+                display: none !important;
+            }
+            .badge-sheet-container {
+                width: 8.5in;
+                height: 11in;
+                margin: 0;
+                padding: 0;
+                page-break-after: always;
+                box-shadow: none;
+            }
+            .badge-grid {
+                page-break-inside: avoid;
+                padding: 0.1in;
+                gap: 0.03in;
+            }
+            .badge {
+                border: 1px solid #000;
+                page-break-inside: avoid;
+            }
+            .page-break {
+                display: none;
+            }
+        }
+
+        /* Badge grid layout */
+        .badge-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 0.05in;
+            width: 8.5in;
+            height: 11in;
+            box-sizing: border-box;
+            padding: 0.15in;
+        }
+
+        /* Individual badge styles */
+        .badge {
+            border: 1px solid #000;
+            padding: 0.1in;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            height: 2.3in; /* Reduced height since we removed the header */
+            background-color: white;
+            overflow: hidden;
+        }
+
+        .badge-content {
+            display: flex;
+            width: 100%;
+        }
+
+        .badge-qr {
+            flex: 0 0 1.4in;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .badge-runner-info {
+            flex: 1;
+            text-align: left;
+            padding-left: 0.1in;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .info-section {
+            margin-bottom: 0.05in;
+        }
+
+        .runner-name {
+            font-size: 0.28in;
+            font-weight: bold;
+            line-height: 1;
+            margin-bottom: 0.05in;
+        }
+
+        .runner-details {
+            font-size: 0.15in;
+            margin-bottom: 0.03in;
+            line-height: 1.1;
+        }
+
+        .contact-info {
+            font-size: 0.14in;
+            line-height: 1.2;
+        }
+
+        .contact-label {
+            font-weight: bold;
+            display: inline-block;
+            min-width: 0.6in;
+        }
+
+        .qr-code {
+            width: 1.3in;
+            height: 1.3in;
+            border: 1px solid #ddd;
+            padding: 0.025in;
+            background-color: white;
+        }
+
+        .season-info {
+            font-size: 0.14in;
+            font-style: italic;
+            color: #666;
+        }
+
+        .filter-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-form .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .empty-message {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .pagination {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .pagination li {
+            margin: 0 5px;
+        }
+
+        .pagination button.page-link {
+            background: none;
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: #333;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: inherit;
+        }
+        
+        .pagination button.active {
+            background-color: #2c3e50;
+            color: white;
+            border-color: #2c3e50;
+        }
+
+        .pagination button.page-link:hover:not(.active) {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container screen-only">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <div class="header">
+            <h1>Print Runner Badges</h1>
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+
+        <div class="nav-container">
+            <div class="nav-item">
+                <a href="/" class="button">Home</a>
+            </div>
+            {{if eq .Role "admin"}}
+            <div class="nav-item">
+                <a href="/register" class="button">Register Runner</a>
+            </div>
+            <div class="nav-item">
+                <a href="/seasons" class="button">Manage Seasons</a>
+            </div>
+            <div class="nav-item">
+                <a href="/csv-upload" class="button">Bulk Register</a>
+            </div>
+            <div class="nav-item">
+                <a href="/runners" class="button">View Runners</a>
+            </div>
+            <div class="nav-item">
+                <a href="/badges" class="button active">Print Badges</a>
+            </div>
+            {{end}}
+            <div class="nav-item">
+                <a href="/scan" class="button">Scan QR Code</a>
+            </div>
+        </div>
+
+        <div class="form-container">
+            <div class="controls">
+                <h2>Badge Printing Options</h2>
+                <form action="/badges" method="GET" class="filter-form">
+                    <div class="form-group">
+                        <label for="season">Season:</label>
+                        <select id="season" name="season_id">
+                            <option value="">All Seasons</option>
+                            {{range .Seasons}}
+                            <option value="{{.ID}}" {{if eq .ID $.SelectedSeasonID}}selected{{end}}>{{.Name}}{{if .IsActive}} (Active){{end}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="search">Search:</label>
+                        <input type="text" id="search" name="search" value="{{.SearchQuery}}" placeholder="Name, grade, teacher...">
+                    </div>
+                    <button type="submit" class="submit-btn">Apply Filters</button>
+                </form>
+                <button onclick="window.print();" class="print-button">Print Badges</button>
+                <p>Total runners: {{.TotalRunners}}</p>
+                
+                {{if gt .TotalPages 1}}
+                <div class="pagination-info">
+                    Page {{.CurrentPage}} of {{.TotalPages}} ({{.RunnersPerPage}} badges per page)
+                </div>
+                {{end}}
+            </div>
+
+            {{if not .Registrations}}
+            <div class="empty-message">
+                No runners found matching your criteria.
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    {{if .Registrations}}
+        {{$pageCount := 0}}
+        {{$runnersOnPage := 0}}
+        
+        {{range $index, $reg := .Registrations}}
+            {{if eq $runnersOnPage 0}}
+                {{$pageCount = add $pageCount 1}}
+                {{if gt $pageCount 1}}
+                <div class="page-break screen-only">Page {{$pageCount}} - Continue</div>
+                {{end}}
+                <div class="badge-sheet-container">
+                    <div class="badge-grid">
+            {{end}}
+            
+            <div class="badge">
+                <div class="badge-content">
+                    <div class="badge-qr">
+                        <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{$reg.ID}}" alt="QR Code">
+                    </div>
+                    <div class="badge-runner-info">
+                        <div class="info-section">
+                            <div class="runner-name">{{$reg.FirstName}} {{$reg.LastName}}</div>
+                            <div class="runner-details">Grade: {{$reg.Grade}} | Teacher: {{$reg.Teacher}}</div>
+                            <div class="runner-details">{{if $reg.Gender}}Gender: {{$reg.Gender}}{{end}}</div>
+                        </div>
+                        <div class="info-section">
+                            <div class="contact-info"><span class="contact-label">Parent:</span> {{$reg.ParentContactNumber}}</div>
+                            {{if $reg.BackupContactNumber}}
+                            <div class="contact-info"><span class="contact-label">Backup:</span> {{$reg.BackupContactNumber}}</div>
+                            {{end}}
+                            <div class="contact-info"><span class="contact-label">Email:</span> {{$reg.ParentEmail}}</div>
+                        </div>
+                        <div class="season-info">{{if $reg.Season}}Run Club - {{$reg.Season.Name}}{{end}}</div>
+                    </div>
+                </div>
+            </div>
+            
+            {{$runnersOnPage = add $runnersOnPage 1}}
+            {{if eq $runnersOnPage 8}}
+                    </div>
+                </div>
+                {{$runnersOnPage = 0}}
+            {{end}}
+        {{end}}
+        
+        {{if ne $runnersOnPage 0}}
+            {{$remaining := subtract 8 $runnersOnPage}}
+            {{range $i := sequence 1 $remaining}}
+                <div class="badge" style="visibility: hidden;"></div>
+            {{end}}
+                </div>
+            </div>
+        {{end}}
+        
+        {{if gt .TotalPages 1}}
+        <div class="screen-only">
+            <ul class="pagination">
+                {{if gt .CurrentPage 1}}
+                <li>
+                    <form method="get" action="/badges">
+                        <input type="hidden" name="page" value="{{subtract .CurrentPage 1}}">
+                        {{if .SelectedSeasonID}}<input type="hidden" name="season_id" value="{{.SelectedSeasonID}}">{{end}}
+                        {{if .SearchQuery}}<input type="hidden" name="search" value="{{.SearchQuery}}">{{end}}
+                        <button type="submit" class="page-link">Previous</button>
+                    </form>
+                </li>
+                {{end}}
+                
+                {{range $i := sequence 1 .TotalPages}}
+                <li>
+                    <form method="get" action="/badges">
+                        <input type="hidden" name="page" value="{{$i}}">
+                        {{if $.SelectedSeasonID}}<input type="hidden" name="season_id" value="{{$.SelectedSeasonID}}">{{end}}
+                        {{if $.SearchQuery}}<input type="hidden" name="search" value="{{$.SearchQuery}}">{{end}}
+                        <button type="submit" class="page-link {{if eq $i $.CurrentPage}}active{{end}}">{{$i}}</button>
+                    </form>
+                </li>
+                {{end}}
+                
+                {{if lt .CurrentPage .TotalPages}}
+                <li>
+                    <form method="get" action="/badges">
+                        <input type="hidden" name="page" value="{{add .CurrentPage 1}}">
+                        {{if .SelectedSeasonID}}<input type="hidden" name="season_id" value="{{.SelectedSeasonID}}">{{end}}
+                        {{if .SearchQuery}}<input type="hidden" name="search" value="{{.SearchQuery}}">{{end}}
+                        <button type="submit" class="page-link">Next</button>
+                    </form>
+                </li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+    {{end}}
+</body>
+</html>

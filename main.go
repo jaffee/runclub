@@ -110,6 +110,7 @@ type PageData struct {
 	CurrentPage      int
 	TotalPages       int
 	TotalRunners     int
+	RunnersPerPage   int
 }
 
 // SeasonStat represents statistics for a season
@@ -169,6 +170,7 @@ func main() {
 	http.HandleFunc("/csv-upload", authMiddleware(csvUploadHandler, []string{RoleAdmin}))
 	http.HandleFunc("/runners", authMiddleware(runnersHandler, []string{RoleAdmin}))
 	http.HandleFunc("/runners/export", authMiddleware(runnersExportHandler, []string{RoleAdmin}))
+	http.HandleFunc("/badges", authMiddleware(badgesHandler, []string{RoleAdmin}))
 
 	// API endpoints
 	http.HandleFunc("/api/registrations", authMiddleware(apiRegistrationsHandler, []string{RoleAdmin}))
@@ -232,7 +234,7 @@ func loadTemplates() {
 	}
 
 	// Load each template
-	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "csv_upload", "runners"}
+	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "csv_upload", "runners", "badges"}
 	for _, name := range templateFiles {
 		tmpl, err := template.New(name + ".html").Funcs(funcMap).ParseFiles(fmt.Sprintf("templates/%s.html", name))
 		if err != nil {
@@ -1099,6 +1101,74 @@ func runnersExportHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func badgesHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "run-club-session")
+	username := session.Values["username"].(string)
+	role := session.Values["role"].(string)
+
+	// Get all seasons
+	seasons, err := database.GetAllSeasons()
+	if err != nil {
+		log.Printf("Error getting seasons: %v", err)
+		http.Error(w, "Failed to retrieve seasons", http.StatusInternalServerError)
+		return
+	}
+
+	// Get active season
+	activeSeason, _, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	// Parse query parameters
+	seasonID := r.URL.Query().Get("season_id")
+	
+	// Make sure we HTML-escape the search query for template safety
+	searchQuery := template.HTMLEscapeString(r.URL.Query().Get("search"))
+	
+	pageStr := r.URL.Query().Get("page")
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	
+	// Number of badges per page (8 badges per sheet: 2 columns × 4 rows)
+	runnersPerPage := 8
+	
+	// Get filtered registrations with pagination
+	registrations, totalCount, err := database.GetFilteredRegistrations(seasonID, searchQuery, page, runnersPerPage)
+	if err != nil {
+		log.Printf("Error getting registrations: %v", err)
+		http.Error(w, "Failed to retrieve registrations", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate total pages
+	totalPages := (totalCount + runnersPerPage - 1) / runnersPerPage
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	data := PageData{
+		Title:            "Run Club - Print Badges",
+		User:             username,
+		Role:             role,
+		Seasons:          seasons,
+		ActiveSeason:     activeSeason,
+		Registrations:    registrations,
+		SelectedSeasonID: seasonID,
+		SearchQuery:      searchQuery,
+		CurrentPage:      page,
+		TotalPages:       totalPages,
+		TotalRunners:     totalCount,
+		RunnersPerPage:   runnersPerPage,
+	}
+
+	renderTemplate(w, "badges", data)
 }
 
 func renderTemplate(w http.ResponseWriter, name string, data PageData) {
