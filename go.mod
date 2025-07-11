@@ -1,4 +1,4 @@
-module qrscanner
+module runclub
 
 go 1.23.0
 

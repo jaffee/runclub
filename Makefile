@@ -1,10 +1,7 @@
-.PHONY: run build clean
-
-run:
-	go run main.go
+.PHONY: build clean
 
 build:
-	go build -o qrserver main.go
+	go build -o runclub main.go
 
 clean:
-	rm -f qrserver
+	rm -f runclub

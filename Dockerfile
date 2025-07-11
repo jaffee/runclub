@@ -10,13 +10,13 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o qrtst .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o runclub .
 
 # Final stage
 FROM alpine:latest
 
 # Copy application binary from builder stage
-COPY --from=builder /app/qrtst /usr/local/bin/
+COPY --from=builder /app/runclub /usr/local/bin/
 COPY --from=builder /app/templates /templates
 COPY --from=builder /app/static /static
 COPY --from=builder /app/migrations /migrations
@@ -29,4 +29,4 @@ VOLUME /data
 EXPOSE 8080
 
 # Command to run
-CMD ["/usr/local/bin/qrtst", "--port", "8080"]
+CMD ["/usr/local/bin/runclub", "--port", "8080"]
