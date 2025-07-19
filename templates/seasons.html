@@ -33,6 +33,9 @@
                 <a href="/seasons" class="button active">Manage Seasons</a>
             </div>
             <div class="nav-item">
+                <a href="/tracks" class="button">Manage Tracks</a>
+            </div>
+            <div class="nav-item">
                 <a href="/csv-upload" class="button">Bulk Register</a>
             </div>
             <div class="nav-item">
@@ -42,6 +45,9 @@
                 <a href="/badges" class="button">Print Badges</a>
             </div>
             {{end}}
+            <div class="nav-item">
+                <a href="/stats" class="button">View Statistics</a>
+            </div>
             <div class="nav-item">
                 <a href="/scan" class="button">Scan QR Code</a>
             </div>
@@ -92,6 +98,13 @@
                                     <button type="submit" class="submit-btn">Activate</button>
                                 </form>
                             {{end}}
+                            <div class="public-link-section">
+                                <label>Public Registration Link:</label>
+                                <div class="link-copy-container">
+                                    <input type="text" readonly value="{{ $.BaseURL }}/public/register?token={{.RegistrationToken}}" class="public-link-input" id="link-{{.ID}}">
+                                    <button onclick="copyLink('link-{{.ID}}')" class="copy-btn">Copy</button>
+                                </div>
+                            </div>
                         </div>
                         {{end}}
                     </div>
@@ -127,5 +140,25 @@
             </section>
         </div>
     </div>
+    <script>
+        function copyLink(inputId) {
+            const input = document.getElementById(inputId);
+            input.select();
+            input.setSelectionRange(0, 99999); // For mobile devices
+            
+            try {
+                document.execCommand('copy');
+                // Show feedback
+                const button = input.nextElementSibling;
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+            }
+        }
+    </script>
 </body>
 </html>

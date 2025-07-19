@@ -24,6 +24,21 @@
         <div class="season-banner">
             <p>Active Season: <strong>{{ .ActiveSeason.Name }}</strong></p>
         </div>
+        <div class="track-selector">
+            <h3>Select Track</h3>
+            <div class="track-buttons">
+                {{range .Tracks}}
+                <button class="track-btn {{if .IsDefault}}default{{end}}" data-track-id="{{.ID}}" data-track-name="{{.Name}}" data-track-miles="{{.DistanceMiles}}">
+                    {{.Name}}
+                    <span class="track-distance">{{.DistanceMiles}} miles</span>
+                    {{if .IsDefault}}<span class="default-badge">Default</span>{{end}}
+                </button>
+                {{end}}
+            </div>
+            <div class="selected-track">
+                <p>Selected Track: <span id="selected-track-name">None</span></p>
+            </div>
+        </div>
         <div id="scanner-container">
             <video id="video" playsinline></video>
             <canvas id="canvas" hidden></canvas>

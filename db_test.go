@@ -110,7 +110,7 @@ func TestDatabaseOperations(t *testing.T) {
 		}
 
 		// Record a scan
-		scan, regRetrieved, err := db.RecordScan(reg.ID)
+		scan, regRetrieved, err := db.RecordScan(reg.ID, nil)
 		if err != nil {
 			t.Fatalf("Failed to record scan: %v", err)
 		}
@@ -145,7 +145,7 @@ func TestDatabaseOperations(t *testing.T) {
 
 		// Record another scan for the same registration
 		time.Sleep(time.Millisecond * 100) // Ensure different timestamps
-		_, _, err = db.RecordScan(reg.ID)
+		_, _, err = db.RecordScan(reg.ID, nil)
 		if err != nil {
 			t.Fatalf("Failed to record second scan: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestDatabaseOperations(t *testing.T) {
 			t.Errorf("Nonexistent registration should not exist")
 		}
 
-		_, _, err = db.RecordScan("nonexistent-id")
+		_, _, err = db.RecordScan("nonexistent-id", nil)
 		if err == nil {
 			t.Errorf("Expected error when recording scan for nonexistent registration")
 		}

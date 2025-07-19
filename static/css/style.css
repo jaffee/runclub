@@ -494,3 +494,125 @@ input, select {
     border-radius: 4px;
     margin: 10px 0;
 }
+
+/* Public registration link styles */
+.public-link-section {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e1e4e8;
+}
+
+.public-link-section label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.link-copy-container {
+    display: flex;
+    gap: 8px;
+}
+
+.public-link-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: #f6f8fa;
+    cursor: text;
+}
+
+.copy-btn {
+    padding: 8px 16px;
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.copy-btn:hover {
+    background-color: #1d4ed8;
+}
+
+/* Track selector styles */
+.track-selector {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.track-selector h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+.track-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.track-btn {
+    padding: 10px 20px;
+    background-color: white;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.track-btn:hover {
+    border-color: #2563eb;
+    background-color: #f0f9ff;
+}
+
+.track-btn.active {
+    background-color: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+
+.track-btn.default {
+    border-color: #10b981;
+}
+
+.track-distance {
+    display: block;
+    font-size: 14px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.track-btn.active .track-distance {
+    color: #e0e7ff;
+}
+
+.default-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: #10b981;
+    color: white;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.selected-track {
+    font-size: 18px;
+    font-weight: 500;
+}
+
+#selected-track-name {
+    color: #2563eb;
+    font-weight: bold;
+}

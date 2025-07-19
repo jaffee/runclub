@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <div class="header">
+            <h1>Run Club - Track Management</h1>
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+
+        <div class="form-container">
+            {{if .ActiveSeason}}
+            <section>
+                <h2>Tracks for {{.ActiveSeason.Name}}</h2>
+                {{if .Tracks}}
+                    <div class="tracks-list">
+                        {{range .Tracks}}
+                        <div class="track-item {{if .IsDefault}}default-track{{end}}">
+                            <h3>{{.Name}}</h3>
+                            <p>Distance: {{.DistanceMiles}} miles</p>
+                            {{if .IsDefault}}
+                                <span class="default-badge">Default Track</span>
+                            {{end}}
+                            <p class="track-created">Created on: {{.CreatedAt.Format "Jan 02, 2006"}}</p>
+                        </div>
+                        {{end}}
+                    </div>
+                {{else}}
+                    <p>No tracks defined yet. Create your first track below.</p>
+                {{end}}
+            </section>
+
+            <section>
+                <h2>Create New Track</h2>
+                <form action="/tracks" method="POST" class="register-form">
+                    <div class="form-group">
+                        <label for="name">Track Name:</label>
+                        <input type="text" id="name" name="name" required placeholder="e.g., Short Loop, Long Trail">
+                    </div>
+                    <div class="form-group">
+                        <label for="distance_miles">Distance (miles):</label>
+                        <input type="number" id="distance_miles" name="distance_miles" step="0.1" min="0.1" required placeholder="e.g., 1.5">
+                    </div>
+                    <div class="form-group">
+                        <label for="is_default">
+                            <input type="checkbox" id="is_default" name="is_default" value="true">
+                            Set as default track
+                        </label>
+                        <p class="form-help">The default track will be automatically selected when scanning.</p>
+                    </div>
+                    <button type="submit" class="submit-btn">Create Track</button>
+                </form>
+            </section>
+            {{else}}
+                <div class="error-message">
+                    <p>No active season. Please create and activate a season before managing tracks.</p>
+                    <a href="/seasons" class="button">Go to Seasons</a>
+                </div>
+            {{end}}
+        </div>
+    </div>
+
+    <style>
+        .tracks-list {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .track-item {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            position: relative;
+        }
+
+        .track-item.default-track {
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+
+        .track-item h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .track-item p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .default-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: #10b981;
+            color: white;
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .track-created {
+            font-size: 14px;
+            font-style: italic;
+            color: #999;
+        }
+
+        .form-help {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</body>
+</html>

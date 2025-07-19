@@ -49,10 +49,11 @@ var users = map[string]struct {
 
 // Season represents a running season
 type Season struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	IsActive  bool      `json:"isActive"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	IsActive          bool      `json:"isActive"`
+	CreatedAt         time.Time `json:"createdAt"`
+	RegistrationToken string    `json:"registrationToken"`
 }
 
 // Registration represents a runner registration
@@ -67,8 +68,21 @@ type Registration struct {
 	ParentContactNumber string    `json:"parentContactNumber"`
 	BackupContactNumber string    `json:"backupContactNumber"`
 	ParentEmail         string    `json:"parentEmail"`
+	DismissalMethod     string    `json:"dismissalMethod"`
+	Allergies           string    `json:"allergies"`
+	MedicalInfo         string    `json:"medicalInfo"`
 	RegisteredAt        time.Time `json:"registeredAt"`
 	Season              *Season   `json:"season,omitempty"`
+}
+
+// Track represents a running track/route
+type Track struct {
+	ID            string    `json:"id"`
+	SeasonID      string    `json:"seasonId"`
+	Name          string    `json:"name"`
+	DistanceMiles float64   `json:"distanceMiles"`
+	IsDefault     bool      `json:"isDefault"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 // ScanRecord represents a record of a QR code scan
@@ -76,9 +90,11 @@ type ScanRecord struct {
 	ID             string    `json:"id"`
 	RegistrationID string    `json:"registrationId"`
 	SeasonID       string    `json:"seasonId"`
+	TrackID        *string   `json:"trackId,omitempty"`
 	ScannedAt      time.Time `json:"scannedAt"`
 	RunnerName     string    `json:"runnerName,omitempty"` // Populated for API responses
 	Season         *Season   `json:"season,omitempty"`
+	Track          *Track    `json:"track,omitempty"`
 }
 
 // ScanResult represents the result of a scan operation
@@ -98,6 +114,7 @@ type PageData struct {
 	Role             string
 	ActiveSeason     *Season
 	Seasons          []*Season
+	Tracks           []*Track
 	SeasonStats      []SeasonStat
 	Success          bool
 	Message          string
@@ -111,6 +128,9 @@ type PageData struct {
 	TotalPages       int
 	TotalRunners     int
 	RunnersPerPage   int
+	BaseURL          string
+	Stats            *SeasonStats
+	SelectedSeason   *Season
 }
 
 // SeasonStat represents statistics for a season
@@ -119,6 +139,37 @@ type SeasonStat struct {
 	SeasonName  string
 	RunnerCount int
 	ScanCount   int
+}
+
+// RunnerStats represents statistics for a runner
+type RunnerStats struct {
+	RegistrationID string
+	FirstName      string
+	LastName       string
+	Grade          string
+	Teacher        string
+	RunCount       int
+	TotalDistance  float64
+}
+
+// GradeStats represents statistics for a grade
+type GradeStats struct {
+	Grade         string
+	RunnerCount   int
+	TotalRuns     int
+	TotalDistance float64
+	TopRunners    []RunnerStats
+}
+
+// SeasonStats represents comprehensive statistics for a season
+type SeasonStats struct {
+	TotalRunners   int
+	TotalRuns      int
+	TotalDistance  float64
+	AveragePerRun  float64
+	GradeStats     []GradeStats
+	TopRunners     []RunnerStats
+	TrackUsage     map[string]int
 }
 
 var (
@@ -158,24 +209,30 @@ func main() {
 	// Load templates
 	loadTemplates()
 
-	// Create handlers
-	http.HandleFunc("/", authMiddleware(homeHandler, []string{RoleAdmin, RoleScanner, RoleViewer}))
-	http.HandleFunc("/login", loginHandler)
-	http.HandleFunc("/logout", logoutHandler)
-	http.HandleFunc("/scan", authMiddleware(scanHandler, []string{RoleAdmin, RoleScanner}))
-	http.HandleFunc("/register", authMiddleware(registerHandler, []string{RoleAdmin}))
-	http.HandleFunc("/success", authMiddleware(successHandler, []string{RoleAdmin}))
-	http.HandleFunc("/seasons", authMiddleware(seasonsHandler, []string{RoleAdmin}))
-	http.HandleFunc("/seasons/activate", authMiddleware(activateSeasonHandler, []string{RoleAdmin}))
-	http.HandleFunc("/csv-upload", authMiddleware(csvUploadHandler, []string{RoleAdmin}))
-	http.HandleFunc("/runners", authMiddleware(runnersHandler, []string{RoleAdmin}))
-	http.HandleFunc("/runners/export", authMiddleware(runnersExportHandler, []string{RoleAdmin}))
-	http.HandleFunc("/badges", authMiddleware(badgesHandler, []string{RoleAdmin}))
+	// Create handlers with logging middleware
+	http.HandleFunc("/", loggingMiddleware(authMiddleware(homeHandler, []string{RoleAdmin, RoleScanner, RoleViewer})))
+	http.HandleFunc("/login", loggingMiddleware(loginHandler))
+	http.HandleFunc("/logout", loggingMiddleware(logoutHandler))
+	http.HandleFunc("/scan", loggingMiddleware(authMiddleware(scanHandler, []string{RoleAdmin, RoleScanner})))
+	http.HandleFunc("/register", loggingMiddleware(authMiddleware(registerHandler, []string{RoleAdmin})))
+	http.HandleFunc("/success", loggingMiddleware(authMiddleware(successHandler, []string{RoleAdmin})))
+	http.HandleFunc("/seasons", loggingMiddleware(authMiddleware(seasonsHandler, []string{RoleAdmin})))
+	http.HandleFunc("/seasons/activate", loggingMiddleware(authMiddleware(activateSeasonHandler, []string{RoleAdmin})))
+	http.HandleFunc("/tracks", loggingMiddleware(authMiddleware(tracksHandler, []string{RoleAdmin})))
+	http.HandleFunc("/stats", loggingMiddleware(authMiddleware(statsHandler, []string{RoleAdmin, RoleViewer})))
+	http.HandleFunc("/csv-upload", loggingMiddleware(authMiddleware(csvUploadHandler, []string{RoleAdmin})))
+	http.HandleFunc("/runners", loggingMiddleware(authMiddleware(runnersHandler, []string{RoleAdmin})))
+	http.HandleFunc("/runners/export", loggingMiddleware(authMiddleware(runnersExportHandler, []string{RoleAdmin})))
+	http.HandleFunc("/badges", loggingMiddleware(authMiddleware(badgesHandler, []string{RoleAdmin})))
 
 	// API endpoints
-	http.HandleFunc("/api/registrations", authMiddleware(apiRegistrationsHandler, []string{RoleAdmin}))
-	http.HandleFunc("/api/scan", authMiddleware(apiScanHandler, []string{RoleAdmin, RoleScanner}))
-	http.HandleFunc("/api/scans", authMiddleware(apiScansHandler, []string{RoleAdmin, RoleScanner}))
+	http.HandleFunc("/api/registrations", loggingMiddleware(authMiddleware(apiRegistrationsHandler, []string{RoleAdmin})))
+	http.HandleFunc("/api/scan", loggingMiddleware(authMiddleware(apiScanHandler, []string{RoleAdmin, RoleScanner})))
+	http.HandleFunc("/api/scans", loggingMiddleware(authMiddleware(apiScansHandler, []string{RoleAdmin, RoleScanner})))
+
+	// Public registration endpoints (no auth required)
+	http.HandleFunc("/public/register", loggingMiddleware(publicRegisterHandler))
+	http.HandleFunc("/public/success", loggingMiddleware(publicSuccessHandler))
 
 	// Serve static files (CSS, JS)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(dir, "static")))))
@@ -234,13 +291,81 @@ func loadTemplates() {
 	}
 
 	// Load each template
-	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "csv_upload", "runners", "badges"}
+	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "tracks", "csv_upload", "runners", "badges", "stats"}
 	for _, name := range templateFiles {
 		tmpl, err := template.New(name + ".html").Funcs(funcMap).ParseFiles(fmt.Sprintf("templates/%s.html", name))
 		if err != nil {
 			log.Fatalf("Error parsing template %s: %v", name, err)
 		}
 		templates[name] = tmpl
+	}
+}
+
+// responseWriter wraps http.ResponseWriter to capture response details
+type responseWriter struct {
+	http.ResponseWriter
+	status int
+	body   []byte
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	// Capture body for logging (limit to first 1000 bytes for large responses)
+	if len(rw.body) < 1000 {
+		rw.body = append(rw.body, b...)
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
+// loggingMiddleware logs all requests and responses
+func loggingMiddleware(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Log request
+		startTime := time.Now()
+		
+		// Read and log request body if present
+		var requestBody []byte
+		if r.Body != nil {
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err == nil {
+				requestBody = bodyBytes
+				// Restore the body for the handler
+				r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+			}
+		}
+		
+		// Log request details
+		log.Printf("REQUEST: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		if r.URL.RawQuery != "" {
+			log.Printf("  Query: %s", r.URL.RawQuery)
+		}
+		if len(requestBody) > 0 && len(requestBody) < 1000 {
+			log.Printf("  Body: %s", string(requestBody))
+		} else if len(requestBody) >= 1000 {
+			log.Printf("  Body: %s... (truncated)", string(requestBody[:1000]))
+		}
+		
+		// Wrap response writer to capture response
+		wrapped := &responseWriter{
+			ResponseWriter: w,
+			status:        200, // default status
+		}
+		
+		// Call the handler
+		handler(wrapped, r)
+		
+		// Log response
+		duration := time.Since(startTime)
+		log.Printf("RESPONSE: %s %s - Status: %d - Duration: %v", r.Method, r.URL.Path, wrapped.status, duration)
+		if len(wrapped.body) > 0 && len(wrapped.body) < 1000 {
+			log.Printf("  Body: %s", string(wrapped.body))
+		} else if len(wrapped.body) >= 1000 {
+			log.Printf("  Body: %s... (truncated)", string(wrapped.body[:1000]))
+		}
 	}
 }
 
@@ -392,6 +517,14 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 
 	if hasActiveSeason {
 		data.ActiveSeason = activeSeason
+		
+		// Get tracks for the active season
+		tracks, err := database.GetTracksBySeasonID(activeSeason.ID)
+		if err != nil {
+			log.Printf("Error getting tracks: %v", err)
+		} else {
+			data.Tracks = tracks
+		}
 	}
 
 	renderTemplate(w, "scan", data)
@@ -452,6 +585,9 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			ParentContactNumber: r.FormValue("parentContactNumber"),
 			BackupContactNumber: r.FormValue("backupContactNumber"),
 			ParentEmail:         r.FormValue("parentEmail"),
+			DismissalMethod:     r.FormValue("dismissalMethod"),
+			Allergies:           r.FormValue("allergies"),
+			MedicalInfo:         r.FormValue("medicalInfo"),
 			RegisteredAt:        time.Now(),
 			Season:              activeSeason,
 		}
@@ -542,6 +678,13 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
+		// Construct base URL from request
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
+		
 		// Render the seasons page
 		renderTemplate(w, "seasons", PageData{
 			Title:        "Run Club - Manage Seasons",
@@ -550,6 +693,7 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 			ActiveSeason: activeSeason,
 			Seasons:      seasons,
 			SeasonStats:  seasonStats,
+			BaseURL:      baseURL,
 		})
 		return
 	}
@@ -631,6 +775,89 @@ func activateSeasonHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/seasons", http.StatusSeeOther)
 }
 
+func tracksHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "run-club-session")
+	username := session.Values["username"].(string)
+	role := session.Values["role"].(string)
+
+	// Get active season
+	activeSeason, hasActiveSeason, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	// For GET requests, show the tracks management page
+	if r.Method == http.MethodGet {
+		data := PageData{
+			Title: "Run Club - Manage Tracks",
+			User:  username,
+			Role:  role,
+		}
+
+		if hasActiveSeason {
+			data.ActiveSeason = activeSeason
+			// Get tracks for the active season
+			tracks, err := database.GetTracksBySeasonID(activeSeason.ID)
+			if err != nil {
+				log.Printf("Error getting tracks: %v", err)
+			} else {
+				data.Tracks = tracks
+			}
+		}
+
+		renderTemplate(w, "tracks", data)
+		return
+	}
+
+	// For POST requests, create a new track
+	if r.Method == http.MethodPost {
+		if !hasActiveSeason {
+			http.Error(w, "Cannot create tracks without an active season", http.StatusBadRequest)
+			return
+		}
+
+		// Parse form data
+		err := r.ParseForm()
+		if err != nil {
+			http.Error(w, "Error parsing form", http.StatusBadRequest)
+			return
+		}
+
+		// Parse distance
+		distanceStr := r.FormValue("distance_miles")
+		distance, err := strconv.ParseFloat(distanceStr, 64)
+		if err != nil {
+			http.Error(w, "Invalid distance value", http.StatusBadRequest)
+			return
+		}
+
+		// Create the track
+		track := &Track{
+			ID:            uuid.New().String(),
+			SeasonID:      activeSeason.ID,
+			Name:          r.FormValue("name"),
+			DistanceMiles: distance,
+			IsDefault:     r.FormValue("is_default") == "true",
+			CreatedAt:     time.Now(),
+		}
+
+		// Save the track
+		err = database.SaveTrack(track)
+		if err != nil {
+			log.Printf("Error saving track: %v", err)
+			http.Error(w, "Failed to save track", http.StatusInternalServerError)
+			return
+		}
+
+		// Redirect back to tracks page
+		http.Redirect(w, r, "/tracks", http.StatusSeeOther)
+		return
+	}
+
+	// Method not allowed for other HTTP methods
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
 func apiRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 	// Get season ID from query parameter, if any
 	seasonID := r.URL.Query().Get("season_id")
@@ -661,6 +888,66 @@ func apiRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
+// statsHandler displays comprehensive statistics for a season
+func statsHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "run-club-session")
+	username := session.Values["username"].(string)
+	role := session.Values["role"].(string)
+
+	// Get seasons for selector
+	seasons, err := database.GetAllSeasons()
+	if err != nil {
+		log.Printf("Error getting seasons: %v", err)
+		http.Error(w, "Failed to retrieve seasons", http.StatusInternalServerError)
+		return
+	}
+
+	// Get active season
+	activeSeason, hasActiveSeason, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	// Get selected season from query parameter or default to active season
+	seasonID := r.URL.Query().Get("season_id")
+	if seasonID == "" && hasActiveSeason {
+		seasonID = activeSeason.ID
+	}
+
+	// Get statistics for the selected season
+	var stats *SeasonStats
+	if seasonID != "" {
+		stats, err = database.GetSeasonStatistics(seasonID)
+		if err != nil {
+			log.Printf("Error getting season statistics: %v", err)
+			http.Error(w, "Failed to retrieve statistics", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Find selected season
+	var selectedSeason *Season
+	for _, s := range seasons {
+		if s.ID == seasonID {
+			selectedSeason = s
+			break
+		}
+	}
+
+	data := PageData{
+		Title:            "Run Club - Statistics",
+		User:             username,
+		Role:             role,
+		Seasons:          seasons,
+		ActiveSeason:     activeSeason,
+		SelectedSeasonID: seasonID,
+		Stats:            stats,
+		SelectedSeason:   selectedSeason,
+	}
+
+	renderTemplate(w, "stats", data)
+}
+
 func apiScanHandler(w http.ResponseWriter, r *http.Request) {
 	// Only accept POST requests
 	if r.Method != http.MethodPost {
@@ -670,7 +957,8 @@ func apiScanHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Parse JSON request
 	var request struct {
-		Code string `json:"code"`
+		Code    string  `json:"code"`
+		TrackID *string `json:"trackId,omitempty"`
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&request)
@@ -694,12 +982,20 @@ func apiScanHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record the scan
-	scan, reg, err := database.RecordScan(request.Code)
+	scan, reg, err := database.RecordScan(request.Code, request.TrackID)
 	if err != nil {
-		sendJSONResponse(w, ScanResult{
-			Success: false,
-			Message: "Runner not found",
-		}, http.StatusOK)
+		// Check if it's a debounce error
+		if strings.Contains(err.Error(), "scan rejected") {
+			sendJSONResponse(w, ScanResult{
+				Success: false,
+				Message: err.Error(),
+			}, http.StatusOK)
+		} else {
+			sendJSONResponse(w, ScanResult{
+				Success: false,
+				Message: "Runner not found",
+			}, http.StatusOK)
+		}
 		return
 	}
 
@@ -867,7 +1163,7 @@ func processCsvFile(file io.Reader, season *Season) (successCount, errorCount in
 	}
 
 	// Check for expected headers
-	expectedHeaders := []string{"FirstName", "LastName", "Grade", "Teacher", "Gender", "ParentContactNumber", "BackupContactNumber", "ParentEmail"}
+	expectedHeaders := []string{"FirstName", "LastName", "Grade", "Teacher", "Gender", "ParentContactNumber", "BackupContactNumber", "ParentEmail", "DismissalMethod", "Allergies", "MedicalInfo"}
 	if !reflect.DeepEqual(header, expectedHeaders) {
 		return 0, 1, []string{"CSV headers do not match expected format. Please use the template provided."}
 	}
@@ -907,9 +1203,12 @@ func processCsvFile(file io.Reader, season *Season) (successCount, errorCount in
 		parentContactNumber := strings.TrimSpace(row[5])
 		backupContactNumber := strings.TrimSpace(row[6])
 		parentEmail := strings.TrimSpace(row[7])
+		dismissalMethod := strings.TrimSpace(row[8])
+		allergies := strings.TrimSpace(row[9])
+		medicalInfo := strings.TrimSpace(row[10])
 
 		// Validate required fields
-		if firstName == "" || lastName == "" || grade == "" || teacher == "" || gender == "" || parentContactNumber == "" || parentEmail == "" {
+		if firstName == "" || lastName == "" || grade == "" || teacher == "" || gender == "" || parentContactNumber == "" || parentEmail == "" || dismissalMethod == "" {
 			errors = append(errors, fmt.Sprintf("Line %d: Missing required field(s)", lineNum))
 			errorCount++
 			continue
@@ -931,6 +1230,14 @@ func processCsvFile(file io.Reader, season *Season) (successCount, errorCount in
 			continue
 		}
 
+		// Validate dismissal method
+		validDismissalMethods := map[string]bool{"Walking unescorted": true, "Picked up by adult": true, "Clayton Crew": true}
+		if !validDismissalMethods[dismissalMethod] {
+			errors = append(errors, fmt.Sprintf("Line %d: Invalid dismissal method '%s'", lineNum, dismissalMethod))
+			errorCount++
+			continue
+		}
+
 		// Create registration
 		reg := &Registration{
 			ID:                  uuid.New().String(),
@@ -943,6 +1250,9 @@ func processCsvFile(file io.Reader, season *Season) (successCount, errorCount in
 			ParentContactNumber: parentContactNumber,
 			BackupContactNumber: backupContactNumber,
 			ParentEmail:         parentEmail,
+			DismissalMethod:     dismissalMethod,
+			Allergies:           allergies,
+			MedicalInfo:         medicalInfo,
 			RegisteredAt:        time.Now(),
 			Season:              season,
 		}
@@ -1117,13 +1427,18 @@ func badgesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get active season
-	activeSeason, _, err := database.GetActiveSeason()
+	activeSeason, hasActiveSeason, err := database.GetActiveSeason()
 	if err != nil {
 		log.Printf("Error getting active season: %v", err)
 	}
 
 	// Parse query parameters
 	seasonID := r.URL.Query().Get("season_id")
+	
+	// Default to active season if no season_id is provided
+	if seasonID == "" && hasActiveSeason {
+		seasonID = activeSeason.ID
+	}
 	
 	// Make sure we HTML-escape the search query for template safety
 	searchQuery := template.HTMLEscapeString(r.URL.Query().Get("search"))
@@ -1169,6 +1484,133 @@ func badgesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderTemplate(w, "badges", data)
+}
+
+// publicRegisterHandler handles public registration for a specific season
+func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
+	// Get token from URL
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing registration token", http.StatusBadRequest)
+		return
+	}
+
+	// Get season by token
+	season, exists, err := database.GetSeasonByRegistrationToken(token)
+	if err != nil {
+		log.Printf("Error getting season by token: %v", err)
+		http.Error(w, "Failed to retrieve season", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Invalid registration link", http.StatusNotFound)
+		return
+	}
+
+	// For GET requests, show the form
+	if r.Method == http.MethodGet {
+		data := PageData{
+			Title:        fmt.Sprintf("Run Club - Register for %s", season.Name),
+			ActiveSeason: season,
+			// For public registration, we don't have a logged-in user
+			User: "",
+			Role: "",
+		}
+		renderTemplate(w, "register", data)
+		return
+	}
+
+	// For POST requests, process the form submission
+	if r.Method == http.MethodPost {
+		// Parse form data
+		err := r.ParseForm()
+		if err != nil {
+			http.Error(w, "Error parsing form", http.StatusBadRequest)
+			return
+		}
+
+		// Create a new registration
+		reg := &Registration{
+			ID:                  uuid.New().String(),
+			SeasonID:            &season.ID,
+			FirstName:           r.FormValue("firstName"),
+			LastName:            r.FormValue("lastName"),
+			Grade:               r.FormValue("grade"),
+			Teacher:             r.FormValue("teacher"),
+			Gender:              r.FormValue("gender"),
+			ParentContactNumber: r.FormValue("parentContactNumber"),
+			BackupContactNumber: r.FormValue("backupContactNumber"),
+			ParentEmail:         r.FormValue("parentEmail"),
+			DismissalMethod:     r.FormValue("dismissalMethod"),
+			Allergies:           r.FormValue("allergies"),
+			MedicalInfo:         r.FormValue("medicalInfo"),
+			RegisteredAt:        time.Now(),
+			Season:              season,
+		}
+
+		// Save the registration to the database
+		err = database.SaveRegistration(reg)
+		if err != nil {
+			log.Printf("Error saving registration: %v", err)
+			http.Error(w, "Failed to save registration", http.StatusInternalServerError)
+			return
+		}
+
+		// Redirect to public success page with token
+		http.Redirect(w, r, fmt.Sprintf("/public/success?id=%s&token=%s", reg.ID, token), http.StatusSeeOther)
+		return
+	}
+
+	// Method not allowed for other HTTP methods
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// publicSuccessHandler shows success page for public registrations
+func publicSuccessHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the registration ID and token from URL query parameters
+	id := r.URL.Query().Get("id")
+	token := r.URL.Query().Get("token")
+	
+	if id == "" || token == "" {
+		http.Error(w, "Missing parameters", http.StatusBadRequest)
+		return
+	}
+
+	// Verify token is valid
+	season, exists, err := database.GetSeasonByRegistrationToken(token)
+	if err != nil || !exists {
+		http.Error(w, "Invalid registration link", http.StatusNotFound)
+		return
+	}
+
+	// Look up the registration
+	reg, exists, err := database.GetRegistration(id)
+	if err != nil {
+		log.Printf("Error getting registration: %v", err)
+		http.Error(w, "Failed to retrieve registration", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Registration not found", http.StatusNotFound)
+		return
+	}
+
+	// Verify registration belongs to the season
+	if reg.SeasonID == nil || *reg.SeasonID != season.ID {
+		http.Error(w, "Registration not found", http.StatusNotFound)
+		return
+	}
+
+	// Render the success page with registration details
+	data := PageData{
+		Title:        "Run Club - Registration Successful",
+		Registration: reg,
+		// For public registration, we don't have a logged-in user
+		User: "",
+		Role: "",
+	}
+
+	renderTemplate(w, "success", data)
 }
 
 func renderTemplate(w http.ResponseWriter, name string, data PageData) {

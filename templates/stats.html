@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .stats-container {
+            display: grid;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 1.2em;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #10b981;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .grade-stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .grade-stats-table th,
+        .grade-stats-table td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .grade-stats-table th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .grade-stats-table tr:hover {
+            background-color: #f9fafb;
+        }
+        
+        .top-runners-section {
+            margin-top: 20px;
+        }
+        
+        .top-runners-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .grade-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .grade-card h4 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #10b981;
+            padding-bottom: 10px;
+        }
+        
+        .runner-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .runner-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .runner-rank {
+            width: 30px;
+            height: 30px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .runner-info {
+            flex: 1;
+            margin-left: 15px;
+        }
+        
+        .runner-name {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .runner-teacher {
+            font-size: 0.85em;
+            color: #666;
+        }
+        
+        .runner-stats {
+            text-align: right;
+        }
+        
+        .runner-distance {
+            font-weight: 600;
+            color: #10b981;
+        }
+        
+        .runner-runs {
+            font-size: 0.85em;
+            color: #666;
+        }
+        
+        .track-usage {
+            margin-top: 20px;
+        }
+        
+        .track-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .season-selector {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f3f4f6;
+            border-radius: 8px;
+        }
+        
+        .season-selector select {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <div class="header">
+            <h1>Run Club - Statistics</h1>
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+
+        <div class="nav-container">
+            <div class="nav-item">
+                <a href="/" class="button">Home</a>
+            </div>
+            {{if eq .Role "admin"}}
+            <div class="nav-item">
+                <a href="/register" class="button">Register Runner</a>
+            </div>
+            <div class="nav-item">
+                <a href="/seasons" class="button">Manage Seasons</a>
+            </div>
+            <div class="nav-item">
+                <a href="/tracks" class="button">Manage Tracks</a>
+            </div>
+            <div class="nav-item">
+                <a href="/csv-upload" class="button">Bulk Register</a>
+            </div>
+            <div class="nav-item">
+                <a href="/runners" class="button">View Runners</a>
+            </div>
+            <div class="nav-item">
+                <a href="/badges" class="button">Print Badges</a>
+            </div>
+            {{end}}
+            <div class="nav-item">
+                <a href="/stats" class="button active">Statistics</a>
+            </div>
+            <div class="nav-item">
+                <a href="/scan" class="button">Scan QR Code</a>
+            </div>
+        </div>
+
+        <div class="form-container">
+            {{if .Seasons}}
+            <div class="season-selector">
+                <form method="GET" action="/stats">
+                    <label for="season_id">Select Season: </label>
+                    <select name="season_id" id="season_id" onchange="this.form.submit()">
+                        <option value="">-- Select a season --</option>
+                        {{range .Seasons}}
+                        <option value="{{.ID}}" {{if eq $.SelectedSeasonID .ID}}selected{{end}}>
+                            {{.Name}} {{if .IsActive}}(Active){{end}}
+                        </option>
+                        {{end}}
+                    </select>
+                </form>
+            </div>
+            {{end}}
+
+            {{if .Stats}}
+            <div class="stats-container">
+                <h2>{{.SelectedSeason.Name}} Statistics</h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Runners</h3>
+                        <div class="stat-value">{{.Stats.TotalRunners}}</div>
+                        <div class="stat-label">Registered participants</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>Total Runs</h3>
+                        <div class="stat-value">{{.Stats.TotalRuns}}</div>
+                        <div class="stat-label">Completed runs</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>Total Distance</h3>
+                        <div class="stat-value">{{printf "%.1f" .Stats.TotalDistance}}</div>
+                        <div class="stat-label">Miles run</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>Average Distance</h3>
+                        <div class="stat-value">{{printf "%.2f" .Stats.AveragePerRun}}</div>
+                        <div class="stat-label">Miles per run</div>
+                    </div>
+                </div>
+
+                {{if .Stats.GradeStats}}
+                <div class="stat-card">
+                    <h3>Statistics by Grade</h3>
+                    <table class="grade-stats-table">
+                        <thead>
+                            <tr>
+                                <th>Grade</th>
+                                <th>Runners</th>
+                                <th>Total Runs</th>
+                                <th>Total Distance</th>
+                                <th>Avg Distance/Runner</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Stats.GradeStats}}
+                            <tr>
+                                <td>{{.Grade}}</td>
+                                <td>{{.RunnerCount}}</td>
+                                <td>{{.TotalRuns}}</td>
+                                <td>{{printf "%.1f" .TotalDistance}} mi</td>
+                                <td>
+                                    {{if gt .RunnerCount 0}}
+                                        {{printf "%.1f" (divide .TotalDistance .RunnerCount)}} mi
+                                    {{else}}
+                                        0.0 mi
+                                    {{end}}
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+                {{end}}
+
+                {{if .Stats.GradeStats}}
+                <div class="stat-card">
+                    <h3>Top 3 Runners by Grade</h3>
+                    <div class="top-runners-grid">
+                        {{range .Stats.GradeStats}}
+                        {{if .TopRunners}}
+                        <div class="grade-card">
+                            <h4>Grade {{.Grade}}</h4>
+                            <ul class="runner-list">
+                                {{range $index, $runner := .TopRunners}}
+                                <li class="runner-item">
+                                    <div class="runner-rank">{{add $index 1}}</div>
+                                    <div class="runner-info">
+                                        <div class="runner-name">{{.FirstName}} {{.LastName}}</div>
+                                        <div class="runner-teacher">Teacher: {{.Teacher}}</div>
+                                    </div>
+                                    <div class="runner-stats">
+                                        <div class="runner-distance">{{printf "%.1f" .TotalDistance}} mi</div>
+                                        <div class="runner-runs">{{.RunCount}} runs</div>
+                                    </div>
+                                </li>
+                                {{end}}
+                            </ul>
+                        </div>
+                        {{end}}
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+
+                {{if .Stats.TopRunners}}
+                <div class="stat-card">
+                    <h3>Overall Top 10 Runners</h3>
+                    <table class="grade-stats-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Name</th>
+                                <th>Grade</th>
+                                <th>Teacher</th>
+                                <th>Runs</th>
+                                <th>Total Distance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range $index, $runner := .Stats.TopRunners}}
+                            <tr>
+                                <td>{{add $index 1}}</td>
+                                <td>{{.FirstName}} {{.LastName}}</td>
+                                <td>{{.Grade}}</td>
+                                <td>{{.Teacher}}</td>
+                                <td>{{.RunCount}}</td>
+                                <td>{{printf "%.1f" .TotalDistance}} mi</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+                {{end}}
+
+                {{if .Stats.TrackUsage}}
+                <div class="stat-card">
+                    <h3>Track Usage</h3>
+                    <div class="track-usage">
+                        {{range $track, $count := .Stats.TrackUsage}}
+                        <div class="track-item">
+                            <span>{{$track}}</span>
+                            <span>{{$count}} runs</span>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <div class="no-data">
+                {{if .SelectedSeasonID}}
+                No statistics available for this season yet.
+                {{else}}
+                Please select a season to view statistics.
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>

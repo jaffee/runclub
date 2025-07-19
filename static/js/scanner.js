@@ -8,6 +8,38 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let scanning = false;
     let recentScans = [];
+    let selectedTrackId = null;
+    
+    // Track selection handling
+    const trackButtons = document.querySelectorAll('.track-btn');
+    const selectedTrackName = document.getElementById('selected-track-name');
+    
+    // Auto-select default track if available
+    const defaultTrack = document.querySelector('.track-btn.default');
+    if (defaultTrack) {
+        defaultTrack.click();
+    }
+    
+    trackButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Remove active class from all buttons
+            trackButtons.forEach(btn => btn.classList.remove('active'));
+            
+            // Add active class to clicked button
+            button.classList.add('active');
+            
+            // Update selected track
+            selectedTrackId = button.dataset.trackId;
+            const trackName = button.dataset.trackName;
+            const trackMiles = button.dataset.trackMiles;
+            selectedTrackName.textContent = `${trackName} (${trackMiles} miles)`;
+        });
+    });
+    
+    // Auto-click default track if it exists
+    if (defaultTrack) {
+        defaultTrack.click();
+    }
 
     // Check if browser supports getUserMedia
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -114,12 +146,17 @@ document.addEventListener('DOMContentLoaded', () => {
             updateResultMessage('Processing...', 'alert-info');
             
             // Send the code to the server for validation and recording
+            const requestBody = { code };
+            if (selectedTrackId) {
+                requestBody.trackId = selectedTrackId;
+            }
+            
             const response = await fetch('/api/scan', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ code }),
+                body: JSON.stringify(requestBody),
             });
             
             const result = await response.json();
@@ -135,6 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     grade: result.registration.grade,
                     teacher: result.registration.teacher,
                     seasonName: result.scanRecord.season ? result.scanRecord.season.name : 'Unknown Season',
+                    trackName: result.scanRecord.track ? result.scanRecord.track.name : 'No Track',
+                    trackDistance: result.scanRecord.track ? result.scanRecord.track.distanceMiles : null,
                     scannedAt: new Date(),
                 });
             } else {
@@ -190,6 +229,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const seasonInfo = document.createElement('div');
             seasonInfo.className = 'season-info';
             seasonInfo.textContent = `Season: ${scan.seasonName}`;
+            
+            const trackInfo = document.createElement('div');
+            trackInfo.className = 'track-info';
+            if (scan.trackDistance) {
+                trackInfo.textContent = `Track: ${scan.trackName} (${scan.trackDistance} miles)`;
+            } else {
+                trackInfo.textContent = `Track: ${scan.trackName}`;
+            }
 
             const scanTime = document.createElement('div');
             scanTime.className = 'scan-time';
@@ -198,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scanDetails.appendChild(scanName);
             scanDetails.appendChild(scanInfo);
             scanDetails.appendChild(seasonInfo);
+            scanDetails.appendChild(trackInfo);
             scanDetails.appendChild(scanTime);
             
             scanItem.appendChild(scanDetails);

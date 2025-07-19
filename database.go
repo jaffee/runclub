@@ -130,11 +130,16 @@ func (db *Database) SaveSeason(season *Season) error {
 		}
 	}
 
+	// Generate registration token if not provided
+	if season.RegistrationToken == "" {
+		season.RegistrationToken = uuid.New().String()
+	}
+
 	// Insert the new season
 	_, err = tx.Exec(
-		`INSERT INTO seasons (id, name, is_active, created_at) 
-		VALUES (?, ?, ?, ?)`,
-		season.ID, season.Name, season.IsActive, season.CreatedAt,
+		`INSERT INTO seasons (id, name, is_active, created_at, registration_token) 
+		VALUES (?, ?, ?, ?, ?)`,
+		season.ID, season.Name, season.IsActive, season.CreatedAt, season.RegistrationToken,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save season: %w", err)
@@ -155,10 +160,11 @@ func (db *Database) GetSeason(id string) (*Season, bool, error) {
 	defer db.mutex.RUnlock()
 
 	season := &Season{}
+	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at FROM seasons WHERE id = ?`,
+		`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE id = ?`,
 		id,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt)
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -166,6 +172,37 @@ func (db *Database) GetSeason(id string) (*Season, bool, error) {
 
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get season: %w", err)
+	}
+
+	if registrationToken.Valid {
+		season.RegistrationToken = registrationToken.String
+	}
+
+	return season, true, nil
+}
+
+// GetSeasonByRegistrationToken retrieves a season by its registration token
+func (db *Database) GetSeasonByRegistrationToken(token string) (*Season, bool, error) {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	season := &Season{}
+	var registrationToken sql.NullString
+	err := db.db.QueryRow(
+		`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE registration_token = ?`,
+		token,
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken)
+
+	if err == sql.ErrNoRows {
+		return nil, false, nil
+	}
+
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get season by token: %w", err)
+	}
+
+	if registrationToken.Valid {
+		season.RegistrationToken = registrationToken.String
 	}
 
 	return season, true, nil
@@ -177,9 +214,10 @@ func (db *Database) GetActiveSeason() (*Season, bool, error) {
 	defer db.mutex.RUnlock()
 
 	season := &Season{}
+	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at FROM seasons WHERE is_active = 1`,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt)
+		`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE is_active = 1`,
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -187,6 +225,10 @@ func (db *Database) GetActiveSeason() (*Season, bool, error) {
 
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get active season: %w", err)
+	}
+
+	if registrationToken.Valid {
+		season.RegistrationToken = registrationToken.String
 	}
 
 	return season, true, nil
@@ -244,7 +286,7 @@ func (db *Database) GetAllSeasons() ([]*Season, error) {
 	defer db.mutex.RUnlock()
 
 	rows, err := db.db.Query(
-		`SELECT id, name, is_active, created_at 
+		`SELECT id, name, is_active, created_at, registration_token 
 		FROM seasons
 		ORDER BY created_at DESC`,
 	)
@@ -256,11 +298,15 @@ func (db *Database) GetAllSeasons() ([]*Season, error) {
 	var seasons []*Season
 	for rows.Next() {
 		season := &Season{}
+		var registrationToken sql.NullString
 		err := rows.Scan(
-			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt,
+			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan season row: %w", err)
+		}
+		if registrationToken.Valid {
+			season.RegistrationToken = registrationToken.String
 		}
 		seasons = append(seasons, season)
 	}
@@ -280,10 +326,12 @@ func (db *Database) SaveRegistration(reg *Registration) error {
 	_, err := db.db.Exec(
 		`INSERT INTO registrations (
 			id, season_id, first_name, last_name, grade, teacher, gender,
-			parent_contact_number, backup_contact_number, parent_email, registered_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			parent_contact_number, backup_contact_number, parent_email, 
+			dismissal_method, allergies, medical_info, registered_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		reg.ID, reg.SeasonID, reg.FirstName, reg.LastName, reg.Grade, reg.Teacher, reg.Gender,
-		reg.ParentContactNumber, reg.BackupContactNumber, reg.ParentEmail, reg.RegisteredAt,
+		reg.ParentContactNumber, reg.BackupContactNumber, reg.ParentEmail,
+		reg.DismissalMethod, reg.Allergies, reg.MedicalInfo, reg.RegisteredAt,
 	)
 
 	if err != nil {
@@ -301,17 +349,22 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 	reg := &Registration{}
 	var seasonID sql.NullString
 	var genderNull sql.NullString
+	var dismissalMethodNull sql.NullString
+	var allergiesNull sql.NullString
+	var medicalInfoNull sql.NullString
 
 	// Query registration with season data
 	err := db.db.QueryRow(
 		`SELECT
 			r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
-			r.parent_contact_number, r.backup_contact_number, r.parent_email, r.registered_at
+			r.parent_contact_number, r.backup_contact_number, r.parent_email, 
+			r.dismissal_method, r.allergies, r.medical_info, r.registered_at
 		FROM registrations r WHERE r.id = ?`,
 		id,
 	).Scan(
 		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
-		&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
+		&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
+		&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisteredAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -322,11 +375,29 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 		return nil, false, fmt.Errorf("failed to get registration: %w", err)
 	}
 
-	// Handle NULL gender value
+	// Handle NULL values
 	if genderNull.Valid {
 		reg.Gender = genderNull.String
 	} else {
 		reg.Gender = "" // Use empty string for NULL gender
+	}
+	
+	if dismissalMethodNull.Valid {
+		reg.DismissalMethod = dismissalMethodNull.String
+	} else {
+		reg.DismissalMethod = ""
+	}
+	
+	if allergiesNull.Valid {
+		reg.Allergies = allergiesNull.String
+	} else {
+		reg.Allergies = ""
+	}
+	
+	if medicalInfoNull.Valid {
+		reg.MedicalInfo = medicalInfoNull.String
+	} else {
+		reg.MedicalInfo = ""
 	}
 
 	// Set season ID if not null
@@ -335,17 +406,21 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 
 		// Fetch the associated season
 		season := &Season{}
+		var seasonRegToken sql.NullString
 		err = db.db.QueryRow(
-			`SELECT id, name, is_active, created_at
+			`SELECT id, name, is_active, created_at, registration_token
 			FROM seasons WHERE id = ?`,
 			reg.SeasonID,
-		).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt)
+		).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &seasonRegToken)
 
 		if err != nil && err != sql.ErrNoRows {
 			return nil, false, fmt.Errorf("failed to get season for registration: %w", err)
 		}
 
 		if err == nil {
+			if seasonRegToken.Valid {
+				season.RegistrationToken = seasonRegToken.String
+			}
 			reg.Season = season
 		}
 	}
@@ -436,7 +511,8 @@ func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page,
 	// Base query
 	query := `SELECT
 		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
-		r.parent_contact_number, r.backup_contact_number, r.parent_email, r.registered_at,
+		r.parent_contact_number, r.backup_contact_number, r.parent_email, 
+		r.dismissal_method, r.allergies, r.medical_info, r.registered_at,
 		s.id, s.name, s.is_active, s.created_at
 	FROM registrations r
 	INNER JOIN seasons s ON r.season_id = s.id`
@@ -503,22 +579,41 @@ func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page,
 		var seasonIDNull, seasonNameNull sql.NullString
 		var seasonIsActiveNull sql.NullBool
 		var seasonCreatedAtNull sql.NullTime
-		var genderNull sql.NullString
+		var genderNull, dismissalMethodNull, allergiesNull, medicalInfoNull sql.NullString
 
 		err := rows.Scan(
 			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
-			&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
+			&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
+			&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisteredAt,
 			&seasonIDNull, &seasonNameNull, &seasonIsActiveNull, &seasonCreatedAtNull,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan registration row: %w", err)
 		}
 
-		// Handle NULL gender value
+		// Handle NULL values
 		if genderNull.Valid {
 			reg.Gender = genderNull.String
 		} else {
 			reg.Gender = "" // Use empty string for NULL gender
+		}
+		
+		if dismissalMethodNull.Valid {
+			reg.DismissalMethod = dismissalMethodNull.String
+		} else {
+			reg.DismissalMethod = ""
+		}
+		
+		if allergiesNull.Valid {
+			reg.Allergies = allergiesNull.String
+		} else {
+			reg.Allergies = ""
+		}
+		
+		if medicalInfoNull.Valid {
+			reg.MedicalInfo = medicalInfoNull.String
+		} else {
+			reg.MedicalInfo = ""
 		}
 
 		// Add season info if available
@@ -540,8 +635,112 @@ func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page,
 	return regs, totalCount, nil
 }
 
+// SaveTrack saves a track to the database
+func (db *Database) SaveTrack(track *Track) error {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	// Begin a transaction
+	tx, err := db.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// If this track is default, unset default on all other tracks for this season
+	if track.IsDefault {
+		_, err = tx.Exec("UPDATE tracks SET is_default = 0 WHERE season_id = ?", track.SeasonID)
+		if err != nil {
+			return fmt.Errorf("failed to unset default tracks: %w", err)
+		}
+	}
+
+	// Insert the new track
+	_, err = tx.Exec(
+		`INSERT INTO tracks (id, season_id, name, distance_miles, is_default, created_at) 
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		track.ID, track.SeasonID, track.Name, track.DistanceMiles, track.IsDefault, track.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save track: %w", err)
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// GetTracksBySeasonID retrieves all tracks for a given season
+func (db *Database) GetTracksBySeasonID(seasonID string) ([]*Track, error) {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	rows, err := db.db.Query(
+		`SELECT id, season_id, name, distance_miles, is_default, created_at 
+		FROM tracks WHERE season_id = ? ORDER BY is_default DESC, name ASC`,
+		seasonID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tracks: %w", err)
+	}
+	defer rows.Close()
+
+	var tracks []*Track
+	for rows.Next() {
+		track := &Track{}
+		err := rows.Scan(
+			&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles, 
+			&track.IsDefault, &track.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan track row: %w", err)
+		}
+		tracks = append(tracks, track)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating track rows: %w", err)
+	}
+
+	return tracks, nil
+}
+
+// GetDefaultTrackForSeason retrieves the default track for a season
+func (db *Database) GetDefaultTrackForSeason(seasonID string) (*Track, error) {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	track := &Track{}
+	err := db.db.QueryRow(
+		`SELECT id, season_id, name, distance_miles, is_default, created_at 
+		FROM tracks WHERE season_id = ? AND is_default = 1`,
+		seasonID,
+	).Scan(
+		&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles, 
+		&track.IsDefault, &track.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default track: %w", err)
+	}
+
+	return track, nil
+}
+
 // RecordScan records a new scan in the database
-func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registration, error) {
+func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRecord, *Registration, error) {
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
@@ -593,11 +792,12 @@ func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registratio
 
 		// Get the associated season if it exists
 		season := &Season{}
+		var seasonRegToken sql.NullString
 		err = tx.QueryRow(
-			`SELECT id, name, is_active, created_at FROM seasons WHERE id = ?`,
+			`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE id = ?`,
 			reg.SeasonID,
 		).Scan(
-			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt,
+			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &seasonRegToken,
 		)
 
 		if err != nil && err != sql.ErrNoRows {
@@ -605,19 +805,63 @@ func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registratio
 		}
 
 		if err == nil {
+			if seasonRegToken.Valid {
+				season.RegistrationToken = seasonRegToken.String
+			}
 			reg.Season = season
+		}
+	}
+
+	// Get track distance if track ID is provided
+	var trackDistance float64
+	if trackID != nil && *trackID != "" {
+		err = tx.QueryRow("SELECT distance_miles FROM tracks WHERE id = ?", *trackID).Scan(&trackDistance)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get track distance: %w", err)
+		}
+	} else {
+		// If no track specified, try to get default track for the season
+		if reg.SeasonID != nil {
+			err = tx.QueryRow("SELECT distance_miles FROM tracks WHERE season_id = ? AND is_default = 1", *reg.SeasonID).Scan(&trackDistance)
+			if err != nil && err != sql.ErrNoRows {
+				return nil, nil, fmt.Errorf("failed to get default track distance: %w", err)
+			}
+		}
+	}
+
+	// Check for last scan to implement debounce (5 min/mile minimum pace)
+	now := time.Now()
+	if trackDistance > 0 {
+		var lastScanTime sql.NullTime
+		err = tx.QueryRow(
+			"SELECT scanned_at FROM scan_records WHERE registration_id = ? ORDER BY scanned_at DESC LIMIT 1",
+			registrationID,
+		).Scan(&lastScanTime)
+		
+		if err == nil && lastScanTime.Valid {
+			// Calculate time since last scan
+			timeSinceLastScan := now.Sub(lastScanTime.Time)
+			
+			// Calculate minimum time required for this distance at 5 min/mile pace
+			minimumTime := time.Duration(trackDistance * 5 * float64(time.Minute))
+			
+			// Reject if scan is too soon
+			if timeSinceLastScan < minimumTime {
+				minutesSince := timeSinceLastScan.Minutes()
+				pacePerMile := minutesSince / trackDistance
+				return nil, nil, fmt.Errorf("scan rejected: too soon since last scan (%.1f minutes ago, %.1f min/mile pace). Minimum pace is 5 min/mile", minutesSince, pacePerMile)
+			}
 		}
 	}
 
 	// Create a new scan record
 	scanID := uuid.New().String()
-	now := time.Now()
 
-	// Insert the scan record with season ID
+	// Insert the scan record with season ID and track ID
 	_, err = tx.Exec(
-		`INSERT INTO scan_records (id, registration_id, season_id, scanned_at) 
-		VALUES (?, ?, ?, ?)`,
-		scanID, registrationID, reg.SeasonID, now,
+		`INSERT INTO scan_records (id, registration_id, season_id, track_id, scanned_at) 
+		VALUES (?, ?, ?, ?, ?)`,
+		scanID, registrationID, reg.SeasonID, trackID, now,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to insert scan record: %w", err)
@@ -633,8 +877,25 @@ func (db *Database) RecordScan(registrationID string) (*ScanRecord, *Registratio
 		ID:             scanID,
 		RegistrationID: registrationID,
 		SeasonID:       *reg.SeasonID,
+		TrackID:        trackID,
 		ScannedAt:      now,
 		Season:         reg.Season,
+	}
+	
+	// If track ID was provided, fetch the track info
+	if trackID != nil && *trackID != "" {
+		track := &Track{}
+		err = db.db.QueryRow(
+			`SELECT id, season_id, name, distance_miles, is_default, created_at 
+			FROM tracks WHERE id = ?`,
+			*trackID,
+		).Scan(
+			&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles, 
+			&track.IsDefault, &track.CreatedAt,
+		)
+		if err == nil {
+			scan.Track = track
+		}
 	}
 
 	return scan, reg, nil
@@ -788,4 +1049,197 @@ func (db *Database) GetScanCountForSeason(seasonID string) (int, error) {
 	}
 
 	return count, nil
+}
+
+// GetSeasonStatistics returns comprehensive statistics for a season
+func (db *Database) GetSeasonStatistics(seasonID string) (*SeasonStats, error) {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	stats := &SeasonStats{
+		TrackUsage: make(map[string]int),
+	}
+
+	// Get total runners
+	err := db.db.QueryRow(
+		"SELECT COUNT(DISTINCT id) FROM registrations WHERE season_id = ?",
+		seasonID,
+	).Scan(&stats.TotalRunners)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total runners: %w", err)
+	}
+
+	// Get total runs and distance
+	err = db.db.QueryRow(`
+		SELECT 
+			COUNT(*) as total_runs,
+			COALESCE(SUM(t.distance_miles), 0) as total_distance
+		FROM scan_records sr
+		LEFT JOIN tracks t ON sr.track_id = t.id
+		WHERE sr.season_id = ?
+	`, seasonID).Scan(&stats.TotalRuns, &stats.TotalDistance)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total runs and distance: %w", err)
+	}
+
+	// Calculate average per run
+	if stats.TotalRuns > 0 {
+		stats.AveragePerRun = stats.TotalDistance / float64(stats.TotalRuns)
+	}
+
+	// Get grade statistics
+	gradeRows, err := db.db.Query(`
+		SELECT 
+			r.grade,
+			COUNT(DISTINCT r.id) as runner_count,
+			COUNT(sr.id) as total_runs,
+			COALESCE(SUM(t.distance_miles), 0) as total_distance
+		FROM registrations r
+		LEFT JOIN scan_records sr ON r.id = sr.registration_id
+		LEFT JOIN tracks t ON sr.track_id = t.id
+		WHERE r.season_id = ?
+		GROUP BY r.grade
+		ORDER BY r.grade
+	`, seasonID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get grade statistics: %w", err)
+	}
+	defer gradeRows.Close()
+
+	var gradeStats []GradeStats
+	for gradeRows.Next() {
+		var gs GradeStats
+		err := gradeRows.Scan(&gs.Grade, &gs.RunnerCount, &gs.TotalRuns, &gs.TotalDistance)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan grade stats: %w", err)
+		}
+		gradeStats = append(gradeStats, gs)
+	}
+
+	// Get top 3 runners for each grade
+	for i := range gradeStats {
+		topRunners, err := db.getTopRunnersForGrade(seasonID, gradeStats[i].Grade, 3)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get top runners for grade %s: %w", gradeStats[i].Grade, err)
+		}
+		gradeStats[i].TopRunners = topRunners
+	}
+	stats.GradeStats = gradeStats
+
+	// Get overall top 10 runners
+	topRunners, err := db.getTopRunners(seasonID, 10)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get top runners: %w", err)
+	}
+	stats.TopRunners = topRunners
+
+	// Get track usage
+	trackRows, err := db.db.Query(`
+		SELECT 
+			t.name,
+			COUNT(*) as usage_count
+		FROM scan_records sr
+		JOIN tracks t ON sr.track_id = t.id
+		WHERE sr.season_id = ?
+		GROUP BY t.id, t.name
+		ORDER BY usage_count DESC
+	`, seasonID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get track usage: %w", err)
+	}
+	defer trackRows.Close()
+
+	for trackRows.Next() {
+		var trackName string
+		var count int
+		err := trackRows.Scan(&trackName, &count)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan track usage: %w", err)
+		}
+		stats.TrackUsage[trackName] = count
+	}
+
+	return stats, nil
+}
+
+// getTopRunnersForGrade returns the top N runners for a specific grade
+func (db *Database) getTopRunnersForGrade(seasonID, grade string, limit int) ([]RunnerStats, error) {
+	rows, err := db.db.Query(`
+		SELECT 
+			r.id,
+			r.first_name,
+			r.last_name,
+			r.grade,
+			r.teacher,
+			COUNT(sr.id) as run_count,
+			COALESCE(SUM(t.distance_miles), 0) as total_distance
+		FROM registrations r
+		LEFT JOIN scan_records sr ON r.id = sr.registration_id
+		LEFT JOIN tracks t ON sr.track_id = t.id
+		WHERE r.season_id = ? AND r.grade = ?
+		GROUP BY r.id, r.first_name, r.last_name, r.grade, r.teacher
+		HAVING run_count > 0
+		ORDER BY total_distance DESC, run_count DESC
+		LIMIT ?
+	`, seasonID, grade, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var runners []RunnerStats
+	for rows.Next() {
+		var rs RunnerStats
+		err := rows.Scan(
+			&rs.RegistrationID, &rs.FirstName, &rs.LastName,
+			&rs.Grade, &rs.Teacher, &rs.RunCount, &rs.TotalDistance,
+		)
+		if err != nil {
+			return nil, err
+		}
+		runners = append(runners, rs)
+	}
+
+	return runners, nil
+}
+
+// getTopRunners returns the top N runners overall
+func (db *Database) getTopRunners(seasonID string, limit int) ([]RunnerStats, error) {
+	rows, err := db.db.Query(`
+		SELECT 
+			r.id,
+			r.first_name,
+			r.last_name,
+			r.grade,
+			r.teacher,
+			COUNT(sr.id) as run_count,
+			COALESCE(SUM(t.distance_miles), 0) as total_distance
+		FROM registrations r
+		LEFT JOIN scan_records sr ON r.id = sr.registration_id
+		LEFT JOIN tracks t ON sr.track_id = t.id
+		WHERE r.season_id = ?
+		GROUP BY r.id, r.first_name, r.last_name, r.grade, r.teacher
+		HAVING run_count > 0
+		ORDER BY total_distance DESC, run_count DESC
+		LIMIT ?
+	`, seasonID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var runners []RunnerStats
+	for rows.Next() {
+		var rs RunnerStats
+		err := rows.Scan(
+			&rs.RegistrationID, &rs.FirstName, &rs.LastName,
+			&rs.Grade, &rs.Teacher, &rs.RunCount, &rs.TotalDistance,
+		)
+		if err != nil {
+			return nil, err
+		}
+		runners = append(runners, rs)
+	}
+
+	return runners, nil
 }

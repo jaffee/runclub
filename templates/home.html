@@ -49,6 +49,12 @@
                 </a>
             </div>
             <div class="nav-item">
+                <a href="/tracks" class="button">
+                    <h2>Manage Tracks</h2>
+                    <p>Create and manage running tracks for the current season</p>
+                </a>
+            </div>
+            <div class="nav-item">
                 <a href="/csv-upload" class="button">
                     <h2>Bulk Register</h2>
                     <p>Register multiple runners by uploading a CSV file</p>
@@ -64,6 +70,14 @@
                 <a href="/badges" class="button">
                     <h2>Print Badges</h2>
                     <p>Generate printable badges with QR codes</p>
+                </a>
+            </div>
+            {{ end }}
+            {{ if or (eq .Role "admin") (eq .Role "viewer") }}
+            <div class="nav-item">
+                <a href="/stats" class="button">
+                    <h2>View Statistics</h2>
+                    <p>View comprehensive statistics for each season</p>
                 </a>
             </div>
             {{ end }}

@@ -32,11 +32,8 @@ A web-based application for tracking student participation in a school running c
 ## Running the Application
 
 ```bash
-# Run directly with Go
-go run main.go
-
-# Or use the Makefile
-make run
+go build .
+./runclub
 ```
 
 The server will start at http://localhost:8080 by default.
@@ -47,7 +44,13 @@ The server will start at http://localhost:8080 by default.
 
 Example:
 ```bash
-go run main.go -port 3000
+./runclub -port 3000
+```
+
+## Deploying
+
+```bash
+fly deploy
 ```
 
 ## Pages
@@ -71,15 +74,11 @@ go run main.go -port 3000
 3. When a student completes a run, scan their QR code
 4. The system records the run and displays the student's information
 
-## Requirements
-
-- Go 1.16+ for the web server
-- A device with a camera for scanning QR codes
-- Modern web browser with camera access permission
 
 ## Technologies Used
 
 - **Backend**: Go (web server, HTML templating)
 - **Frontend**: HTML5, CSS3, JavaScript
 - **Libraries**: jsQR (QR code detection), QRCode.js (QR code generation)
-- **Data Storage**: In-memory database (all data is lost when the server restarts)
+- **Data Storage**: SQLite
+- **Deployment**: fly.io

@@ -110,7 +110,7 @@
             display: flex;
             flex-direction: row;
             justify-content: space-between;
-            height: 2.3in; /* Reduced height since we removed the header */
+            height: 2.6in; /* Increased height to accommodate medical info */
             background-color: white;
             overflow: hidden;
         }
@@ -177,6 +177,24 @@
             font-size: 0.14in;
             font-style: italic;
             color: #666;
+        }
+
+        .medical-section {
+            background-color: #fff3cd;
+            border-radius: 3px;
+            padding: 0.02in 0.05in;
+            margin-top: 0.05in;
+        }
+
+        .medical-info {
+            font-size: 0.13in;
+            line-height: 1.2;
+            margin-bottom: 0.02in;
+        }
+
+        .medical-label {
+            font-weight: bold;
+            color: #721c24;
         }
 
         .filter-form {
@@ -276,21 +294,20 @@
         <div class="form-container">
             <div class="controls">
                 <h2>Badge Printing Options</h2>
+                {{if .ActiveSeason}}
+                <div style="background-color: #e8f4f8; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                    <strong>Active Season:</strong> {{.ActiveSeason.Name}}
+                    {{if eq .SelectedSeasonID .ActiveSeason.ID}}
+                    <span style="color: #27ae60; margin-left: 10px;">✓ Currently showing badges for the active season</span>
+                    {{end}}
+                </div>
+                {{end}}
                 <form action="/badges" method="GET" class="filter-form">
-                    <div class="form-group">
-                        <label for="season">Season:</label>
-                        <select id="season" name="season_id">
-                            <option value="">All Seasons</option>
-                            {{range .Seasons}}
-                            <option value="{{.ID}}" {{if eq .ID $.SelectedSeasonID}}selected{{end}}>{{.Name}}{{if .IsActive}} (Active){{end}}</option>
-                            {{end}}
-                        </select>
-                    </div>
                     <div class="form-group">
                         <label for="search">Search:</label>
                         <input type="text" id="search" name="search" value="{{.SearchQuery}}" placeholder="Name, grade, teacher...">
                     </div>
-                    <button type="submit" class="submit-btn">Apply Filters</button>
+                    <button type="submit" class="submit-btn">Search</button>
                 </form>
                 <button onclick="window.print();" class="print-button">Print Badges</button>
                 <p>Total runners: {{.TotalRunners}}</p>
@@ -340,8 +357,18 @@
                             {{if $reg.BackupContactNumber}}
                             <div class="contact-info"><span class="contact-label">Backup:</span> {{$reg.BackupContactNumber}}</div>
                             {{end}}
-                            <div class="contact-info"><span class="contact-label">Email:</span> {{$reg.ParentEmail}}</div>
+                            <div class="contact-info"><span class="contact-label">Dismissal:</span> {{$reg.DismissalMethod}}</div>
                         </div>
+                        {{if or $reg.Allergies $reg.MedicalInfo}}
+                        <div class="info-section medical-section">
+                            {{if $reg.Allergies}}
+                            <div class="medical-info"><span class="medical-label">⚠️ Allergies:</span> {{$reg.Allergies}}</div>
+                            {{end}}
+                            {{if $reg.MedicalInfo}}
+                            <div class="medical-info"><span class="medical-label">⚕️ Medical:</span> {{$reg.MedicalInfo}}</div>
+                            {{end}}
+                        </div>
+                        {{end}}
                         <div class="season-info">{{if $reg.Season}}Run Club - {{$reg.Season.Name}}{{end}}</div>
                     </div>
                 </div>
@@ -371,7 +398,6 @@
                 <li>
                     <form method="get" action="/badges">
                         <input type="hidden" name="page" value="{{subtract .CurrentPage 1}}">
-                        {{if .SelectedSeasonID}}<input type="hidden" name="season_id" value="{{.SelectedSeasonID}}">{{end}}
                         {{if .SearchQuery}}<input type="hidden" name="search" value="{{.SearchQuery}}">{{end}}
                         <button type="submit" class="page-link">Previous</button>
                     </form>
@@ -382,7 +408,6 @@
                 <li>
                     <form method="get" action="/badges">
                         <input type="hidden" name="page" value="{{$i}}">
-                        {{if $.SelectedSeasonID}}<input type="hidden" name="season_id" value="{{$.SelectedSeasonID}}">{{end}}
                         {{if $.SearchQuery}}<input type="hidden" name="search" value="{{$.SearchQuery}}">{{end}}
                         <button type="submit" class="page-link {{if eq $i $.CurrentPage}}active{{end}}">{{$i}}</button>
                     </form>
@@ -393,7 +418,6 @@
                 <li>
                     <form method="get" action="/badges">
                         <input type="hidden" name="page" value="{{add .CurrentPage 1}}">
-                        {{if .SelectedSeasonID}}<input type="hidden" name="season_id" value="{{.SelectedSeasonID}}">{{end}}
                         {{if .SearchQuery}}<input type="hidden" name="search" value="{{.SearchQuery}}">{{end}}
                         <button type="submit" class="page-link">Next</button>
                     </form>

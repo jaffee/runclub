@@ -8,6 +8,7 @@
 </head>
 <body>
     <div class="container">
+        {{ if .User }}
         <div class="user-nav">
             <div class="user-info">
                 <span class="username">{{ .User }}</span>
@@ -15,10 +16,13 @@
             </div>
             <a href="/logout" class="logout-btn">Logout</a>
         </div>
+        {{ end }}
         
         <div class="header">
             <h1>Register Runner</h1>
+            {{ if .User }}
             <a href="/" class="back-link">← Back to Home</a>
+            {{ end }}
         </div>
         <div class="form-container">
             <h2>Registration Form</h2>
@@ -27,7 +31,7 @@
             {{ else }}
             <p class="error-message">No active season. Please create and activate a season before registering runners.</p>
             {{ end }}
-            <form id="register-form" action="/register" method="post" {{ if not .ActiveSeason }}disabled{{ end }}>
+            <form id="register-form" action="{{ if .User }}/register{{ else }}/public/register?token={{ .ActiveSeason.RegistrationToken }}{{ end }}" method="post" {{ if not .ActiveSeason }}disabled{{ end }}>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="firstName">First Name:</label>
@@ -82,6 +86,26 @@
                 <div class="form-group">
                     <label for="parentEmail">Parent Email Address:</label>
                     <input type="email" id="parentEmail" name="parentEmail" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dismissalMethod">How will your child get home after Run Club?</label>
+                    <select id="dismissalMethod" name="dismissalMethod" required>
+                        <option value="">Select an option</option>
+                        <option value="Walking unescorted">Walking unescorted</option>
+                        <option value="Picked up by adult">Picked up by adult</option>
+                        <option value="Clayton Crew">Clayton Crew</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="allergies">Allergies (e.g. food or bee stings):</label>
+                    <textarea id="allergies" name="allergies" rows="2" placeholder="Please list any allergies your child has. We often have snacks after run club."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="medicalInfo">Medical Information (e.g. asthma):</label>
+                    <textarea id="medicalInfo" name="medicalInfo" rows="2" placeholder="Please list any medical conditions you'd like run club volunteers to be aware of."></textarea>
                 </div>
                 
                 <div class="form-group">
