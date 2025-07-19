@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -381,19 +382,19 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 	} else {
 		reg.Gender = "" // Use empty string for NULL gender
 	}
-	
+
 	if dismissalMethodNull.Valid {
 		reg.DismissalMethod = dismissalMethodNull.String
 	} else {
 		reg.DismissalMethod = ""
 	}
-	
+
 	if allergiesNull.Valid {
 		reg.Allergies = allergiesNull.String
 	} else {
 		reg.Allergies = ""
 	}
-	
+
 	if medicalInfoNull.Valid {
 		reg.MedicalInfo = medicalInfoNull.String
 	} else {
@@ -597,19 +598,19 @@ func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page,
 		} else {
 			reg.Gender = "" // Use empty string for NULL gender
 		}
-		
+
 		if dismissalMethodNull.Valid {
 			reg.DismissalMethod = dismissalMethodNull.String
 		} else {
 			reg.DismissalMethod = ""
 		}
-		
+
 		if allergiesNull.Valid {
 			reg.Allergies = allergiesNull.String
 		} else {
 			reg.Allergies = ""
 		}
-		
+
 		if medicalInfoNull.Valid {
 			reg.MedicalInfo = medicalInfoNull.String
 		} else {
@@ -697,7 +698,7 @@ func (db *Database) GetTracksBySeasonID(seasonID string) ([]*Track, error) {
 	for rows.Next() {
 		track := &Track{}
 		err := rows.Scan(
-			&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles, 
+			&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles,
 			&track.IsDefault, &track.CreatedAt,
 		)
 		if err != nil {
@@ -724,7 +725,7 @@ func (db *Database) GetDefaultTrackForSeason(seasonID string) (*Track, error) {
 		FROM tracks WHERE season_id = ? AND is_default = 1`,
 		seasonID,
 	).Scan(
-		&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles, 
+		&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles,
 		&track.IsDefault, &track.CreatedAt,
 	)
 
@@ -759,7 +760,7 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 	reg := &Registration{}
 	var seasonID sql.NullString
 	var genderNull sql.NullString
-
+	log.Printf("checking if reg exists")
 	err = tx.QueryRow(
 		`SELECT
 			id, season_id, first_name, last_name, grade, teacher, gender,
@@ -793,6 +794,7 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 		// Get the associated season if it exists
 		season := &Season{}
 		var seasonRegToken sql.NullString
+		log.Printf("checking if season exists")
 		err = tx.QueryRow(
 			`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE id = ?`,
 			reg.SeasonID,
@@ -815,6 +817,7 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 	// Get track distance if track ID is provided
 	var trackDistance float64
 	if trackID != nil && *trackID != "" {
+		log.Printf("getting track distance")
 		err = tx.QueryRow("SELECT distance_miles FROM tracks WHERE id = ?", *trackID).Scan(&trackDistance)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get track distance: %w", err)
@@ -822,6 +825,7 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 	} else {
 		// If no track specified, try to get default track for the season
 		if reg.SeasonID != nil {
+			log.Printf("getting default track for season")
 			err = tx.QueryRow("SELECT distance_miles FROM tracks WHERE season_id = ? AND is_default = 1", *reg.SeasonID).Scan(&trackDistance)
 			if err != nil && err != sql.ErrNoRows {
 				return nil, nil, fmt.Errorf("failed to get default track distance: %w", err)
@@ -833,18 +837,19 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 	now := time.Now()
 	if trackDistance > 0 {
 		var lastScanTime sql.NullTime
+		log.Printf("checking last scan time")
 		err = tx.QueryRow(
 			"SELECT scanned_at FROM scan_records WHERE registration_id = ? ORDER BY scanned_at DESC LIMIT 1",
 			registrationID,
 		).Scan(&lastScanTime)
-		
+
 		if err == nil && lastScanTime.Valid {
 			// Calculate time since last scan
 			timeSinceLastScan := now.Sub(lastScanTime.Time)
-			
+
 			// Calculate minimum time required for this distance at 5 min/mile pace
 			minimumTime := time.Duration(trackDistance * 5 * float64(time.Minute))
-			
+
 			// Reject if scan is too soon
 			if timeSinceLastScan < minimumTime {
 				minutesSince := timeSinceLastScan.Minutes()
@@ -858,6 +863,7 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 	scanID := uuid.New().String()
 
 	// Insert the scan record with season ID and track ID
+	log.Printf("inserting scan record")
 	_, err = tx.Exec(
 		`INSERT INTO scan_records (id, registration_id, season_id, track_id, scanned_at) 
 		VALUES (?, ?, ?, ?, ?)`,
@@ -867,6 +873,7 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 		return nil, nil, fmt.Errorf("failed to insert scan record: %w", err)
 	}
 
+	log.Printf("committing transaction")
 	// Commit the transaction
 	if err = tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
@@ -881,8 +888,9 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 		ScannedAt:      now,
 		Season:         reg.Season,
 	}
-	
+
 	// If track ID was provided, fetch the track info
+	log.Printf("getting track info")
 	if trackID != nil && *trackID != "" {
 		track := &Track{}
 		err = db.db.QueryRow(
@@ -890,7 +898,7 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 			FROM tracks WHERE id = ?`,
 			*trackID,
 		).Scan(
-			&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles, 
+			&track.ID, &track.SeasonID, &track.Name, &track.DistanceMiles,
 			&track.IsDefault, &track.CreatedAt,
 		)
 		if err == nil {

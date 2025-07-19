@@ -77,13 +77,20 @@ document.addEventListener('DOMContentLoaded', () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             
+            // Calculate the center area to scan (200x200 pixels)
+            const scanSize = 200;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const startX = Math.max(0, centerX - scanSize / 2);
+            const startY = Math.max(0, centerY - scanSize / 2);
+            
             // Draw current video frame to canvas
             canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // Get image data for QR code scanning
-            const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+            // Get image data only from the center scanning area
+            const imageData = canvasContext.getImageData(startX, startY, scanSize, scanSize);
             
-            // Scan for QR code
+            // Scan for QR code only in the center area
             const code = jsQR(imageData.data, imageData.width, imageData.height, {
                 inversionAttempts: 'dontInvert',
             });
@@ -93,8 +100,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('QR code detected:', code.data);
                 resultElement.textContent = code.data;
                 
+                // Adjust QR code location coordinates to account for the scanning area offset
+                const adjustedLocation = {
+                    topLeftCorner: { x: code.location.topLeftCorner.x + startX, y: code.location.topLeftCorner.y + startY },
+                    topRightCorner: { x: code.location.topRightCorner.x + startX, y: code.location.topRightCorner.y + startY },
+                    bottomRightCorner: { x: code.location.bottomRightCorner.x + startX, y: code.location.bottomRightCorner.y + startY },
+                    bottomLeftCorner: { x: code.location.bottomLeftCorner.x + startX, y: code.location.bottomLeftCorner.y + startY }
+                };
+                
                 // Highlight QR code location
-                drawQRCodeOutline(code.location);
+                drawQRCodeOutline(adjustedLocation);
                 
                 // Process the QR code if it looks like a UUID
                 processQRCode(code.data);

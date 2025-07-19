@@ -41,6 +41,7 @@
         </div>
         <div id="scanner-container">
             <video id="video" playsinline></video>
+            <div class="scan-area-overlay"></div>
             <canvas id="canvas" hidden></canvas>
         </div>
         {{ else }}
@@ -50,6 +51,7 @@
         <div id="scanner-container" class="disabled">
             <div class="scanner-overlay">Scanner disabled - No active season</div>
             <video id="video" playsinline disabled></video>
+            <div class="scan-area-overlay"></div>
             <canvas id="canvas" hidden></canvas>
         </div>
         {{ end }}

@@ -153,18 +153,58 @@ h2 {
 /* Scanner styles */
 #scanner-container {
     position: relative;
-    max-width: 100%;
+    max-width: 300px;
+    width: 100%;
     margin: 20px auto;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    aspect-ratio: 1;
 }
 
 #video {
     width: 100%;
-    max-width: 500px;
-    height: auto;
+    height: 100%;
+    object-fit: cover;
     display: block;
-    margin: 0 auto;
-    border: 2px solid #333;
+}
+
+#canvas {
+    display: none;
+}
+
+/* Scanning area overlay */
+.scan-area-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.scan-area-overlay::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    border: 2px solid #00ff00;
     border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+
+.scan-area-overlay::after {
+    content: 'Position QR code here';
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 14px;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
 #result-container {

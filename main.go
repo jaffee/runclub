@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/felixge/fgprof"
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 )
@@ -163,13 +165,13 @@ type GradeStats struct {
 
 // SeasonStats represents comprehensive statistics for a season
 type SeasonStats struct {
-	TotalRunners   int
-	TotalRuns      int
-	TotalDistance  float64
-	AveragePerRun  float64
-	GradeStats     []GradeStats
-	TopRunners     []RunnerStats
-	TrackUsage     map[string]int
+	TotalRunners  int
+	TotalRuns     int
+	TotalDistance float64
+	AveragePerRun float64
+	GradeStats    []GradeStats
+	TopRunners    []RunnerStats
+	TrackUsage    map[string]int
 }
 
 var (
@@ -233,6 +235,17 @@ func main() {
 	// Public registration endpoints (no auth required)
 	http.HandleFunc("/public/register", loggingMiddleware(publicRegisterHandler))
 	http.HandleFunc("/public/success", loggingMiddleware(publicSuccessHandler))
+
+	// Debug endpoints (pprof is automatically registered by importing _ "net/http/pprof")
+	// This adds: /debug/pprof/, /debug/pprof/cmdline, /debug/pprof/profile, /debug/pprof/symbol, /debug/pprof/trace
+	// and /debug/pprof/heap, /debug/pprof/goroutine, /debug/pprof/threadcreate, /debug/pprof/block, /debug/pprof/mutex
+
+	// Add fgprof handler
+	http.HandleFunc("/debug/fgprof", func(w http.ResponseWriter, r *http.Request) {
+		stop := fgprof.Start(w, fgprof.FormatPprof)
+		defer stop()
+		time.Sleep(30 * time.Second) // Profile for 30 seconds by default
+	})
 
 	// Serve static files (CSS, JS)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(dir, "static")))))
@@ -326,7 +339,7 @@ func loggingMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Log request
 		startTime := time.Now()
-		
+
 		// Read and log request body if present
 		var requestBody []byte
 		if r.Body != nil {
@@ -337,7 +350,7 @@ func loggingMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 				r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 			}
 		}
-		
+
 		// Log request details
 		log.Printf("REQUEST: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		if r.URL.RawQuery != "" {
@@ -348,16 +361,16 @@ func loggingMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 		} else if len(requestBody) >= 1000 {
 			log.Printf("  Body: %s... (truncated)", string(requestBody[:1000]))
 		}
-		
+
 		// Wrap response writer to capture response
 		wrapped := &responseWriter{
 			ResponseWriter: w,
-			status:        200, // default status
+			status:         200, // default status
 		}
-		
+
 		// Call the handler
 		handler(wrapped, r)
-		
+
 		// Log response
 		duration := time.Since(startTime)
 		log.Printf("RESPONSE: %s %s - Status: %d - Duration: %v", r.Method, r.URL.Path, wrapped.status, duration)
@@ -517,7 +530,7 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 
 	if hasActiveSeason {
 		data.ActiveSeason = activeSeason
-		
+
 		// Get tracks for the active season
 		tracks, err := database.GetTracksBySeasonID(activeSeason.ID)
 		if err != nil {
@@ -684,7 +697,7 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 			scheme = "https"
 		}
 		baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
-		
+
 		// Render the seasons page
 		renderTemplate(w, "seasons", PageData{
 			Title:        "Run Club - Manage Seasons",
@@ -982,6 +995,7 @@ func apiScanHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record the scan
+	log.Printf("Recording scan for code: %s", request.Code)
 	scan, reg, err := database.RecordScan(request.Code, request.TrackID)
 	if err != nil {
 		// Check if it's a debounce error
@@ -1292,10 +1306,10 @@ func runnersHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Parse query parameters
 	seasonID := r.URL.Query().Get("season_id")
-	
+
 	// Make sure we HTML-escape the search query for template safety
 	searchQuery := template.HTMLEscapeString(r.URL.Query().Get("search"))
-	
+
 	pageStr := r.URL.Query().Get("page")
 	page := 1
 	if pageStr != "" {
@@ -1434,15 +1448,15 @@ func badgesHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Parse query parameters
 	seasonID := r.URL.Query().Get("season_id")
-	
+
 	// Default to active season if no season_id is provided
 	if seasonID == "" && hasActiveSeason {
 		seasonID = activeSeason.ID
 	}
-	
+
 	// Make sure we HTML-escape the search query for template safety
 	searchQuery := template.HTMLEscapeString(r.URL.Query().Get("search"))
-	
+
 	pageStr := r.URL.Query().Get("page")
 	page := 1
 	if pageStr != "" {
@@ -1450,10 +1464,10 @@ func badgesHandler(w http.ResponseWriter, r *http.Request) {
 			page = p
 		}
 	}
-	
+
 	// Number of badges per page (8 badges per sheet: 2 columns × 4 rows)
 	runnersPerPage := 8
-	
+
 	// Get filtered registrations with pagination
 	registrations, totalCount, err := database.GetFilteredRegistrations(seasonID, searchQuery, page, runnersPerPage)
 	if err != nil {
@@ -1570,7 +1584,7 @@ func publicSuccessHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the registration ID and token from URL query parameters
 	id := r.URL.Query().Get("id")
 	token := r.URL.Query().Get("token")
-	
+
 	if id == "" || token == "" {
 		http.Error(w, "Missing parameters", http.StatusBadRequest)
 		return
