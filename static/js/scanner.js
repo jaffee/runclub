@@ -77,8 +77,9 @@ document.addEventListener('DOMContentLoaded', () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             
-            // Calculate the center area to scan (200x200 pixels)
-            const scanSize = 200;
+            // Calculate the center area to scan
+            // Use a larger scan area (280x280) than the visual indicator (200x200) for better detection
+            const scanSize = 280;
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             const startX = Math.max(0, centerX - scanSize / 2);
