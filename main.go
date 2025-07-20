@@ -181,7 +181,7 @@ var (
 )
 
 func main() {
-	log.Println("STARTING UP WOOOOOOOOOOOOOOOOOOO!!!!!!!!!!!!")
+	log.Println("STARTING UP DOGS!!!!!!!!!!!!")
 	// Define command line flags
 	port := flag.String("port", "8080", "Port to serve on")
 	flag.Parse()
