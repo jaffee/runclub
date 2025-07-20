@@ -21,10 +21,13 @@ type Database struct {
 // NewDatabase creates a new SQLite database
 func NewDatabase() (*Database, error) {
 	// Create database file if it doesn't exist
-	dbPath := "/data/runclub.db"
-	// Use local path if data directory doesn't exist (for local development)
-	if _, err := os.Stat("/data"); os.IsNotExist(err) {
-		dbPath = "runclub.db"
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "/data/runclub.db"
+		// Use local path if data directory doesn't exist (for local development)
+		if _, err := os.Stat("/data"); os.IsNotExist(err) {
+			dbPath = "runclub.db"
+		}
 	}
 
 	// Check if we need to initialize the database
@@ -40,9 +43,24 @@ func NewDatabase() (*Database, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Enable WAL mode for better concurrency
+	_, err = db.Exec("PRAGMA journal_mode=WAL")
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to enable WAL mode: %w", err)
+	}
+
+	// Set busy timeout to wait up to 5 seconds when database is locked
+	_, err = db.Exec("PRAGMA busy_timeout=5000")
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
+
 	// Set connection parameters
-	db.SetMaxOpenConns(1) // SQLite supports only one writer at a time
-	db.SetMaxIdleConns(1)
+	// Allow multiple connections for better concurrency with WAL mode
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(time.Hour)
 
 	// Create a new database instance
@@ -742,9 +760,7 @@ func (db *Database) GetDefaultTrackForSeason(seasonID string) (*Track, error) {
 
 // RecordScan records a new scan in the database
 func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRecord, *Registration, error) {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
-
+	// Note: Removed mutex lock - SQLite with WAL mode handles concurrency
 	// Begin a transaction
 	tx, err := db.db.Begin()
 	if err != nil {
