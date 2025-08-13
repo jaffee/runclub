@@ -105,6 +105,9 @@ type ScanResult struct {
 	Message      string        `json:"message"`
 	Registration *Registration `json:"registration,omitempty"`
 	ScanRecord   *ScanRecord   `json:"scanRecord,omitempty"`
+	LapTime      *float64      `json:"lapTime,omitempty"`      // Time in minutes since last scan
+	Pace         *float64      `json:"pace,omitempty"`         // Minutes per mile
+	PreviousScan *ScanRecord   `json:"previousScan,omitempty"` // Previous scan for reference
 }
 
 // PageData holds data to be passed to templates
@@ -1013,13 +1016,35 @@ func apiScanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return success response
-	sendJSONResponse(w, ScanResult{
+	// Get previous scan to calculate lap time and pace
+	previousScan, err := database.GetPreviousScan(request.Code, scan.ScannedAt)
+	if err != nil {
+		log.Printf("Error getting previous scan: %v", err)
+		// Continue without lap time data
+	}
+
+	result := ScanResult{
 		Success:      true,
 		Message:      fmt.Sprintf("Successfully recorded run for %s %s", reg.FirstName, reg.LastName),
 		Registration: reg,
 		ScanRecord:   scan,
-	}, http.StatusOK)
+		PreviousScan: previousScan,
+	}
+
+	// Calculate lap time and pace if we have a previous scan
+	if previousScan != nil {
+		lapTime := scan.ScannedAt.Sub(previousScan.ScannedAt).Minutes()
+		result.LapTime = &lapTime
+
+		// Calculate pace if we have track distance
+		if scan.Track != nil && scan.Track.DistanceMiles > 0 {
+			pace := lapTime / scan.Track.DistanceMiles
+			result.Pace = &pace
+		}
+	}
+
+	// Return success response
+	sendJSONResponse(w, result, http.StatusOK)
 }
 
 func apiScansHandler(w http.ResponseWriter, r *http.Request) {

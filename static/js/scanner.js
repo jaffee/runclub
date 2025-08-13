@@ -179,7 +179,22 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (result.success) {
                 // Runner found and scan recorded
-                updateResultMessage(result.message, 'alert-success');
+                let message = result.message;
+                
+                // Add lap time and pace info if available
+                if (result.lapTime !== undefined && result.lapTime !== null) {
+                    const lapMinutes = Math.floor(result.lapTime);
+                    const lapSeconds = Math.round((result.lapTime - lapMinutes) * 60);
+                    message += ` | Lap time: ${lapMinutes}:${lapSeconds.toString().padStart(2, '0')}`;
+                    
+                    if (result.pace !== undefined && result.pace !== null) {
+                        const paceMinutes = Math.floor(result.pace);
+                        const paceSeconds = Math.round((result.pace - paceMinutes) * 60);
+                        message += ` | Pace: ${paceMinutes}:${paceSeconds.toString().padStart(2, '0')}/mile`;
+                    }
+                }
+                
+                updateResultMessage(message, 'alert-success');
                 
                 // Add to recent scans list
                 addToRecentScans({
@@ -191,6 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     trackName: result.scanRecord.track ? result.scanRecord.track.name : 'No Track',
                     trackDistance: result.scanRecord.track ? result.scanRecord.track.distanceMiles : null,
                     scannedAt: new Date(),
+                    lapTime: result.lapTime,
+                    pace: result.pace,
                 });
             } else {
                 // QR code was valid UUID but runner not found
@@ -262,6 +279,28 @@ document.addEventListener('DOMContentLoaded', () => {
             scanDetails.appendChild(scanInfo);
             scanDetails.appendChild(seasonInfo);
             scanDetails.appendChild(trackInfo);
+            
+            // Add lap time and pace info if available
+            if (scan.lapTime !== undefined && scan.lapTime !== null) {
+                const performanceInfo = document.createElement('div');
+                performanceInfo.className = 'performance-info';
+                
+                const lapMinutes = Math.floor(scan.lapTime);
+                const lapSeconds = Math.round((scan.lapTime - lapMinutes) * 60);
+                let perfText = `Lap: ${lapMinutes}:${lapSeconds.toString().padStart(2, '0')}`;
+                
+                if (scan.pace !== undefined && scan.pace !== null) {
+                    const paceMinutes = Math.floor(scan.pace);
+                    const paceSeconds = Math.round((scan.pace - paceMinutes) * 60);
+                    perfText += ` | Pace: ${paceMinutes}:${paceSeconds.toString().padStart(2, '0')}/mile`;
+                }
+                
+                performanceInfo.textContent = perfText;
+                performanceInfo.style.fontWeight = 'bold';
+                performanceInfo.style.color = '#27ae60';
+                scanDetails.appendChild(performanceInfo);
+            }
+            
             scanDetails.appendChild(scanTime);
             
             scanItem.appendChild(scanDetails);

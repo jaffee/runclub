@@ -925,10 +925,51 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 	return scan, reg, nil
 }
 
+// GetPreviousScan retrieves the most recent scan before the current time for a registration
+func (db *Database) GetPreviousScan(registrationID string, currentScanTime time.Time) (*ScanRecord, error) {
+	scan := &ScanRecord{}
+	var trackID sql.NullString
+	var trackName sql.NullString
+	var trackDistance sql.NullFloat64
+	
+	err := db.db.QueryRow(
+		`SELECT sr.id, sr.registration_id, sr.season_id, sr.track_id, sr.scanned_at,
+		t.id, t.name, t.distance_miles
+		FROM scan_records sr
+		LEFT JOIN tracks t ON sr.track_id = t.id
+		WHERE sr.registration_id = ? AND sr.scanned_at < ?
+		ORDER BY sr.scanned_at DESC
+		LIMIT 1`,
+		registrationID, currentScanTime,
+	).Scan(
+		&scan.ID, &scan.RegistrationID, &scan.SeasonID, &trackID, &scan.ScannedAt,
+		&sql.NullString{}, &trackName, &trackDistance,
+	)
+	
+	if err == sql.ErrNoRows {
+		return nil, nil // No previous scan
+	}
+	
+	if err != nil {
+		return nil, fmt.Errorf("failed to get previous scan: %w", err)
+	}
+	
+	if trackID.Valid {
+		scan.TrackID = &trackID.String
+		if trackName.Valid && trackDistance.Valid {
+			scan.Track = &Track{
+				ID:            trackID.String,
+				Name:          trackName.String,
+				DistanceMiles: trackDistance.Float64,
+			}
+		}
+	}
+	
+	return scan, nil
+}
+
 // GetScansByRegistrationID retrieves all scans for a given registration ID
 func (db *Database) GetScansByRegistrationID(registrationID string) ([]*ScanRecord, error) {
-	db.mutex.RLock()
-	defer db.mutex.RUnlock()
 
 	rows, err := db.db.Query(
 		`SELECT sr.id, sr.registration_id, sr.season_id, sr.scanned_at,
