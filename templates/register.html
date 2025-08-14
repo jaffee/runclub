@@ -34,11 +34,11 @@
             <form id="register-form" action="{{ if .User }}/register{{ else }}/public/register?token={{ .ActiveSeason.RegistrationToken }}{{ end }}" method="post" {{ if not .ActiveSeason }}disabled{{ end }}>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="firstName">First Name:</label>
+                        <label for="firstName">Student First Name:</label>
                         <input type="text" id="firstName" name="firstName" required>
                     </div>
                     <div class="form-group">
-                        <label for="lastName">Last Name:</label>
+                        <label for="lastName">Student Last Name:</label>
                         <input type="text" id="lastName" name="lastName" required>
                     </div>
                 </div>
@@ -74,13 +74,50 @@
                 </div>
                 
                 <div class="form-group">
+                    <label for="tshirtSize">T-Shirt Size:</label>
+                    <select id="tshirtSize" name="tshirtSize" required>
+                        <option value="">Select T-Shirt Size</option>
+                        <option value="YXS">Youth XS</option>
+                        <option value="YS">Youth S</option>
+                        <option value="YM">Youth M</option>
+                        <option value="YL">Youth L</option>
+                        <option value="XS">Adult XS</option>
+                        <option value="S">Adult S</option>
+                        <option value="M">Adult M</option>
+                        <option value="L">Adult L</option>
+                        <option value="XL">Adult XL</option>
+                        <option value="2XL">Adult 2XL</option>
+                        <option value="3XL">Adult 3XL</option>
+                        <option value="4XL">Adult 4XL</option>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="parentFirstName">Parent First Name:</label>
+                        <input type="text" id="parentFirstName" name="parentFirstName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="parentLastName">Parent Last Name:</label>
+                        <input type="text" id="parentLastName" name="parentLastName" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
                     <label for="parentContactNumber">Parent Contact Number:</label>
-                    <input type="tel" id="parentContactNumber" name="parentContactNumber" required>
+                    <input type="tel" id="parentContactNumber" name="parentContactNumber" 
+                           pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}" 
+                           placeholder="123-456-7890" 
+                           title="Please enter a valid phone number (123-456-7890)"
+                           required>
                 </div>
                 
                 <div class="form-group">
                     <label for="backupContactNumber">Backup Contact Number:</label>
-                    <input type="tel" id="backupContactNumber" name="backupContactNumber">
+                    <input type="tel" id="backupContactNumber" name="backupContactNumber"
+                           pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}" 
+                           placeholder="123-456-7890" 
+                           title="Please enter a valid phone number (123-456-7890)">
                 </div>
                 
                 <div class="form-group">

@@ -67,6 +67,9 @@ type Registration struct {
 	Grade               string    `json:"grade"`
 	Teacher             string    `json:"teacher"`
 	Gender              string    `json:"gender"`
+	TshirtSize          string    `json:"tshirtSize"`
+	ParentFirstName     string    `json:"parentFirstName"`
+	ParentLastName      string    `json:"parentLastName"`
 	ParentContactNumber string    `json:"parentContactNumber"`
 	BackupContactNumber string    `json:"backupContactNumber"`
 	ParentEmail         string    `json:"parentEmail"`
@@ -546,6 +549,30 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, "scan", data)
 }
 
+// validatePhoneNumber checks if a phone number matches the format XXX-XXX-XXXX
+func validatePhoneNumber(phone string) bool {
+	// Check for exact format: 3 digits, dash, 3 digits, dash, 4 digits
+	if len(phone) != 12 {
+		return false
+	}
+	
+	// Check format XXX-XXX-XXXX
+	for i, ch := range phone {
+		switch i {
+		case 3, 7: // Position of dashes
+			if ch != '-' {
+				return false
+			}
+		default: // All other positions should be digits
+			if ch < '0' || ch > '9' {
+				return false
+			}
+		}
+	}
+	
+	return true
+}
+
 func registerHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "run-club-session")
 	username := session.Values["username"].(string)
@@ -589,6 +616,19 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Validate phone numbers
+		parentPhone := r.FormValue("parentContactNumber")
+		if !validatePhoneNumber(parentPhone) {
+			http.Error(w, "Invalid parent contact number. Please use format: 123-456-7890", http.StatusBadRequest)
+			return
+		}
+		
+		backupPhone := r.FormValue("backupContactNumber")
+		if backupPhone != "" && !validatePhoneNumber(backupPhone) {
+			http.Error(w, "Invalid backup contact number. Please use format: 123-456-7890", http.StatusBadRequest)
+			return
+		}
+
 		// Create a new registration
 		reg := &Registration{
 			ID:                  uuid.New().String(),
@@ -598,6 +638,9 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			Grade:               r.FormValue("grade"),
 			Teacher:             r.FormValue("teacher"),
 			Gender:              r.FormValue("gender"),
+			TshirtSize:          r.FormValue("tshirtSize"),
+			ParentFirstName:     r.FormValue("parentFirstName"),
+			ParentLastName:      r.FormValue("parentLastName"),
 			ParentContactNumber: r.FormValue("parentContactNumber"),
 			BackupContactNumber: r.FormValue("backupContactNumber"),
 			ParentEmail:         r.FormValue("parentEmail"),
@@ -1568,6 +1611,19 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Validate phone numbers
+		parentPhone := r.FormValue("parentContactNumber")
+		if !validatePhoneNumber(parentPhone) {
+			http.Error(w, "Invalid parent contact number. Please use format: 123-456-7890", http.StatusBadRequest)
+			return
+		}
+		
+		backupPhone := r.FormValue("backupContactNumber")
+		if backupPhone != "" && !validatePhoneNumber(backupPhone) {
+			http.Error(w, "Invalid backup contact number. Please use format: 123-456-7890", http.StatusBadRequest)
+			return
+		}
+
 		// Create a new registration
 		reg := &Registration{
 			ID:                  uuid.New().String(),
@@ -1577,6 +1633,9 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			Grade:               r.FormValue("grade"),
 			Teacher:             r.FormValue("teacher"),
 			Gender:              r.FormValue("gender"),
+			TshirtSize:          r.FormValue("tshirtSize"),
+			ParentFirstName:     r.FormValue("parentFirstName"),
+			ParentLastName:      r.FormValue("parentLastName"),
 			ParentContactNumber: r.FormValue("parentContactNumber"),
 			BackupContactNumber: r.FormValue("backupContactNumber"),
 			ParentEmail:         r.FormValue("parentEmail"),

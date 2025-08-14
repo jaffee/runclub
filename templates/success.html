@@ -27,7 +27,7 @@
         <div class="registration-success">
             <div class="success-icon">✓</div>
             <h2>Thank you for registering!</h2>
-            <p>Your runner has been successfully registered for Run Club. Below is their QR code and registration details.</p>
+            <p>Your runner has been successfully registered for Run Club. Below are their details.</p>
             
             <div class="qr-code-container">
                 <img id="qrcode" class="qr-code" alt="QR Code">
@@ -41,6 +41,7 @@
                 <p><strong>Grade:</strong> {{ .Grade }}</p>
                 <p><strong>Teacher:</strong> {{ .Teacher }}</p>
                 <p><strong>Gender:</strong> {{ .Gender }}</p>
+                <p><strong>Parent Name:</strong> {{ .ParentFirstName }} {{ .ParentLastName }}</p>
                 <p><strong>Parent Contact:</strong> {{ .ParentContactNumber }}</p>
                 {{ if .BackupContactNumber }}
                 <p><strong>Backup Contact:</strong> {{ .BackupContactNumber }}</p>
@@ -57,7 +58,6 @@
                 {{ end }}
             </div>
             
-            <p>Please take a screenshot of this QR code or print it for your runner to use during Run Club.</p>
             {{ if .User }}
             <p><a href="/register" class="back-link">Register another runner</a></p>
             {{ else }}

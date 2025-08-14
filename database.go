@@ -344,12 +344,12 @@ func (db *Database) SaveRegistration(reg *Registration) error {
 
 	_, err := db.db.Exec(
 		`INSERT INTO registrations (
-			id, season_id, first_name, last_name, grade, teacher, gender,
-			parent_contact_number, backup_contact_number, parent_email, 
+			id, season_id, first_name, last_name, grade, teacher, gender, tshirt_size,
+			parent_first_name, parent_last_name, parent_contact_number, backup_contact_number, parent_email, 
 			dismissal_method, allergies, medical_info, registered_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		reg.ID, reg.SeasonID, reg.FirstName, reg.LastName, reg.Grade, reg.Teacher, reg.Gender,
-		reg.ParentContactNumber, reg.BackupContactNumber, reg.ParentEmail,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		reg.ID, reg.SeasonID, reg.FirstName, reg.LastName, reg.Grade, reg.Teacher, reg.Gender, reg.TshirtSize,
+		reg.ParentFirstName, reg.ParentLastName, reg.ParentContactNumber, reg.BackupContactNumber, reg.ParentEmail,
 		reg.DismissalMethod, reg.Allergies, reg.MedicalInfo, reg.RegisteredAt,
 	)
 
@@ -371,18 +371,21 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 	var dismissalMethodNull sql.NullString
 	var allergiesNull sql.NullString
 	var medicalInfoNull sql.NullString
+	var parentFirstNameNull sql.NullString
+	var parentLastNameNull sql.NullString
 
 	// Query registration with season data
+	var tshirtSizeNull sql.NullString
 	err := db.db.QueryRow(
 		`SELECT
-			r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
-			r.parent_contact_number, r.backup_contact_number, r.parent_email, 
+			r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender, r.tshirt_size,
+			r.parent_first_name, r.parent_last_name, r.parent_contact_number, r.backup_contact_number, r.parent_email, 
 			r.dismissal_method, r.allergies, r.medical_info, r.registered_at
 		FROM registrations r WHERE r.id = ?`,
 		id,
 	).Scan(
-		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
-		&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
+		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull, &tshirtSizeNull,
+		&parentFirstNameNull, &parentLastNameNull, &reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
 		&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisteredAt,
 	)
 
@@ -399,6 +402,21 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 		reg.Gender = genderNull.String
 	} else {
 		reg.Gender = "" // Use empty string for NULL gender
+	}
+	if tshirtSizeNull.Valid {
+		reg.TshirtSize = tshirtSizeNull.String
+	} else {
+		reg.TshirtSize = "" // Use empty string for NULL tshirt size
+	}
+	if parentFirstNameNull.Valid {
+		reg.ParentFirstName = parentFirstNameNull.String
+	} else {
+		reg.ParentFirstName = ""
+	}
+	if parentLastNameNull.Valid {
+		reg.ParentLastName = parentLastNameNull.String
+	} else {
+		reg.ParentLastName = ""
 	}
 
 	if dismissalMethodNull.Valid {
@@ -453,8 +471,8 @@ func (db *Database) GetAllRegistrations(seasonID string) ([]*Registration, error
 	defer db.mutex.RUnlock()
 
 	query := `SELECT
-		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
-		r.parent_contact_number, r.backup_contact_number, r.parent_email, r.registered_at,
+		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender, r.tshirt_size,
+		r.parent_first_name, r.parent_last_name, r.parent_contact_number, r.backup_contact_number, r.parent_email, r.registered_at,
 		s.id, s.name, s.is_active, s.created_at
 	FROM registrations r
 	INNER JOIN seasons s ON r.season_id = s.id`
@@ -482,22 +500,38 @@ func (db *Database) GetAllRegistrations(seasonID string) ([]*Registration, error
 		var seasonIDNull, seasonNameNull sql.NullString
 		var seasonIsActiveNull sql.NullBool
 		var seasonCreatedAtNull sql.NullTime
-		var genderNull sql.NullString
+		var genderNull, tshirtSizeNull sql.NullString
+		var parentFirstNameNull, parentLastNameNull sql.NullString
 
 		err := rows.Scan(
-			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
-			&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
+			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull, &tshirtSizeNull,
+			&parentFirstNameNull, &parentLastNameNull, &reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail, &reg.RegisteredAt,
 			&seasonIDNull, &seasonNameNull, &seasonIsActiveNull, &seasonCreatedAtNull,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan registration row: %w", err)
 		}
 
-		// Handle NULL gender value
+		// Handle NULL values
 		if genderNull.Valid {
 			reg.Gender = genderNull.String
 		} else {
 			reg.Gender = "" // Use empty string for NULL gender
+		}
+		if tshirtSizeNull.Valid {
+			reg.TshirtSize = tshirtSizeNull.String
+		} else {
+			reg.TshirtSize = ""
+		}
+		if parentFirstNameNull.Valid {
+			reg.ParentFirstName = parentFirstNameNull.String
+		} else {
+			reg.ParentFirstName = ""
+		}
+		if parentLastNameNull.Valid {
+			reg.ParentLastName = parentLastNameNull.String
+		} else {
+			reg.ParentLastName = ""
 		}
 
 		// Add season info if available
@@ -529,8 +563,8 @@ func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page,
 
 	// Base query
 	query := `SELECT
-		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender,
-		r.parent_contact_number, r.backup_contact_number, r.parent_email, 
+		r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender, r.tshirt_size,
+		r.parent_first_name, r.parent_last_name, r.parent_contact_number, r.backup_contact_number, r.parent_email, 
 		r.dismissal_method, r.allergies, r.medical_info, r.registered_at,
 		s.id, s.name, s.is_active, s.created_at
 	FROM registrations r
@@ -598,11 +632,12 @@ func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page,
 		var seasonIDNull, seasonNameNull sql.NullString
 		var seasonIsActiveNull sql.NullBool
 		var seasonCreatedAtNull sql.NullTime
-		var genderNull, dismissalMethodNull, allergiesNull, medicalInfoNull sql.NullString
+		var genderNull, tshirtSizeNull, dismissalMethodNull, allergiesNull, medicalInfoNull sql.NullString
+		var parentFirstNameNull, parentLastNameNull sql.NullString
 
 		err := rows.Scan(
-			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull,
-			&reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
+			&reg.ID, &reg.SeasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull, &tshirtSizeNull,
+			&parentFirstNameNull, &parentLastNameNull, &reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
 			&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisteredAt,
 			&seasonIDNull, &seasonNameNull, &seasonIsActiveNull, &seasonCreatedAtNull,
 		)
@@ -615,6 +650,21 @@ func (db *Database) GetFilteredRegistrations(seasonID, searchQuery string, page,
 			reg.Gender = genderNull.String
 		} else {
 			reg.Gender = "" // Use empty string for NULL gender
+		}
+		if tshirtSizeNull.Valid {
+			reg.TshirtSize = tshirtSizeNull.String
+		} else {
+			reg.TshirtSize = ""
+		}
+		if parentFirstNameNull.Valid {
+			reg.ParentFirstName = parentFirstNameNull.String
+		} else {
+			reg.ParentFirstName = ""
+		}
+		if parentLastNameNull.Valid {
+			reg.ParentLastName = parentLastNameNull.String
+		} else {
+			reg.ParentLastName = ""
 		}
 
 		if dismissalMethodNull.Valid {
