@@ -41,12 +41,12 @@
                 <p><strong>Grade:</strong> {{ .Grade }}</p>
                 <p><strong>Teacher:</strong> {{ .Teacher }}</p>
                 <p><strong>Gender:</strong> {{ .Gender }}</p>
-                <p><strong>Parent Name:</strong> {{ .ParentFirstName }} {{ .ParentLastName }}</p>
-                <p><strong>Parent Contact:</strong> {{ .ParentContactNumber }}</p>
+                <p><strong>Parent/Guardian Name:</strong> {{ .ParentFirstName }} {{ .ParentLastName }}</p>
+                <p><strong>Parent/Guardian Contact:</strong> {{ .ParentContactNumber }}</p>
                 {{ if .BackupContactNumber }}
                 <p><strong>Backup Contact:</strong> {{ .BackupContactNumber }}</p>
                 {{ end }}
-                <p><strong>Parent Email:</strong> {{ .ParentEmail }}</p>
+                <p><strong>Parent/Guardian Email:</strong> {{ .ParentEmail }}</p>
                 <p><strong>Dismissal Method:</strong> {{ .DismissalMethod }}</p>
                 {{ if .Allergies }}
                 <p><strong>Allergies:</strong> {{ .Allergies }}</p>

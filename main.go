@@ -619,7 +619,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		// Validate phone numbers
 		parentPhone := r.FormValue("parentContactNumber")
 		if !validatePhoneNumber(parentPhone) {
-			http.Error(w, "Invalid parent contact number. Please use format: 123-456-7890", http.StatusBadRequest)
+			http.Error(w, "Invalid parent/guardian contact number. Please use format: 123-456-7890", http.StatusBadRequest)
 			return
 		}
 		
@@ -1614,7 +1614,7 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 		// Validate phone numbers
 		parentPhone := r.FormValue("parentContactNumber")
 		if !validatePhoneNumber(parentPhone) {
-			http.Error(w, "Invalid parent contact number. Please use format: 123-456-7890", http.StatusBadRequest)
+			http.Error(w, "Invalid parent/guardian contact number. Please use format: 123-456-7890", http.StatusBadRequest)
 			return
 		}
 		

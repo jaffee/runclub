@@ -42,10 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const parentPhone = document.getElementById('parentContactNumber').value;
             const backupPhone = document.getElementById('backupContactNumber').value;
             
-            // Validate parent phone (required)
+            // Validate parent/guardian phone (required)
             if (!(/^\d{3}-\d{3}-\d{4}$/.test(parentPhone))) {
                 e.preventDefault();
-                alert('Please enter a valid parent contact number (123-456-7890)');
+                alert('Please enter a valid parent/guardian contact number (123-456-7890)');
                 document.getElementById('parentContactNumber').focus();
                 return false;
             }

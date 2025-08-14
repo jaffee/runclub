@@ -336,13 +336,18 @@ label {
     font-weight: 600;
 }
 
-input, select {
+input, select, textarea {
     width: 100%;
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 16px;
     box-sizing: border-box;
+}
+
+textarea {
+    resize: vertical;
+    font-family: inherit;
 }
 
 .submit-btn {
