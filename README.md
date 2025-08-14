@@ -53,6 +53,18 @@ Example:
 fly deploy
 ```
 
+## Debugging
+If you need direct database access:
+```
+flyctl ssh console -a run-club-scanner-morning-frost-1239
+sqlite3 /data/runclub.db
+.tables
+.mode column
+.headers on
+.schema <tablename>
+```
+
+
 ## Pages
 
 - **Home Page** (/) - Main navigation page with links to scan and register
@@ -82,3 +94,4 @@ fly deploy
 - **Libraries**: jsQR (QR code detection), QRCode.js (QR code generation)
 - **Data Storage**: SQLite
 - **Deployment**: fly.io
+
