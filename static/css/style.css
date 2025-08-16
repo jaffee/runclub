@@ -515,6 +515,28 @@ textarea {
     border-radius: 12px;
 }
 
+.info-badge {
+    background-color: #3498db;
+    color: white;
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    display: inline-block;
+    margin-bottom: 5px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin-right: 8px;
+    width: auto;
+}
+
 .stats-table {
     width: 100%;
     border-collapse: collapse;

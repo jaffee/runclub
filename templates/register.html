@@ -95,17 +95,18 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="parentFirstName">Parent/Guardian First Name:</label>
-                        <input type="text" id="parentFirstName" name="parentFirstName" required>
+                        <input type="text" id="parentFirstName" name="parentFirstName" value="{{ .PrefillData.parentFirstName }}" required>
                     </div>
                     <div class="form-group">
                         <label for="parentLastName">Parent/Guardian Last Name:</label>
-                        <input type="text" id="parentLastName" name="parentLastName" required>
+                        <input type="text" id="parentLastName" name="parentLastName" value="{{ .PrefillData.parentLastName }}" required>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label for="parentContactNumber">Parent/Guardian Contact Number:</label>
                     <input type="tel" id="parentContactNumber" name="parentContactNumber" 
+                           value="{{ .PrefillData.parentContactNumber }}"
                            pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}" 
                            placeholder="123-456-7890" 
                            title="Please enter a valid phone number (123-456-7890)"
@@ -115,6 +116,7 @@
                 <div class="form-group">
                     <label for="backupContactNumber">Backup Contact Number:</label>
                     <input type="tel" id="backupContactNumber" name="backupContactNumber"
+                           value="{{ .PrefillData.backupContactNumber }}"
                            pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}" 
                            placeholder="123-456-7890" 
                            title="Please enter a valid phone number (123-456-7890)">
@@ -122,16 +124,17 @@
                 
                 <div class="form-group">
                     <label for="parentEmail">Parent/Guardian Email Address:</label>
-                    <input type="email" id="parentEmail" name="parentEmail" required>
+                    <input type="email" id="parentEmail" name="parentEmail" value="{{ .PrefillData.parentEmail }}" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="dismissalMethod">How will your child get home after Run Club?</label>
                     <select id="dismissalMethod" name="dismissalMethod" required>
                         <option value="">Select an option</option>
-                        <option value="Walking unescorted">Walking unescorted</option>
-                        <option value="Picked up by adult">Picked up by adult</option>
-                        <option value="Clayton Crew">Clayton Crew</option>
+                        <option value="Walking Unescorted" {{ if eq .PrefillData.dismissalMethod "Walking Unescorted" }}selected{{ end }}>Walking Unescorted</option>
+                        <option value="Walking Escorted" {{ if eq .PrefillData.dismissalMethod "Walking Escorted" }}selected{{ end }}>Walking Escorted</option>
+                        <option value="Car Pickup" {{ if eq .PrefillData.dismissalMethod "Car Pickup" }}selected{{ end }}>Car Pickup</option>
+                        <option value="Clayton Crew" {{ if eq .PrefillData.dismissalMethod "Clayton Crew" }}selected{{ end }}>Clayton Crew</option>
                     </select>
                 </div>
                 
@@ -144,6 +147,15 @@
                     <label for="medicalInfo">Medical Information (e.g. asthma):</label>
                     <textarea id="medicalInfo" name="medicalInfo" rows="3" placeholder="Please list any medical conditions you'd like run club volunteers to be aware of."></textarea>
                 </div>
+                
+                {{ if .ActiveSeason.SpringRegistrationEnabled }}
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="registerForSpring" name="registerForSpring" value="true">
+                        Also register for Spring season
+                    </label>
+                </div>
+                {{ end }}
                 
                 <div class="form-group">
                     <button type="submit" class="submit-btn">Register Runner</button>

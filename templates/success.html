@@ -29,10 +29,6 @@
             <h2>Thank you for registering!</h2>
             <p>Your runner has been successfully registered for Run Club. Below are their details.</p>
             
-            <div class="qr-code-container">
-                <img id="qrcode" class="qr-code" alt="QR Code">
-            </div>
-            
             <div class="registration-details">
                 <h3>Registration Details</h3>
                 {{ with .Registration }}
@@ -58,6 +54,14 @@
                 {{ end }}
             </div>
             
+            <div class="payment-info">
+                <h3>Payment Information</h3>
+                <p>Please send payment via Venmo:</p>
+                <a href="https://account.venmo.com/u/Matthew-Jaffee-1" target="_blank">
+                    <img src="/static/images/jaffee_venmo.jpeg" alt="Venmo QR Code" style="max-width: 300px; margin: 20px auto; display: block;">
+                </a>
+            </div>
+            
             {{ if .User }}
             <p><a href="/register" class="back-link">Register another runner</a></p>
             {{ else }}
@@ -65,29 +69,5 @@
             {{ end }}
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const studentId = "{{ .Registration.ID }}";
-            const qrCodeElement = document.getElementById('qrcode');
-            
-            // Generate QR code
-            QRCode.toDataURL(studentId, { 
-                width: 256,
-                height: 256,
-                margin: 1,
-                color: {
-                    dark: '#000000',
-                    light: '#ffffff'
-                }
-            }, (err, url) => {
-                if (err) {
-                    console.error("Error generating QR code:", err);
-                    return;
-                }
-                qrCodeElement.src = url;
-            });
-        });
-    </script>
 </body>
 </html>

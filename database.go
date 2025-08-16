@@ -156,9 +156,9 @@ func (db *Database) SaveSeason(season *Season) error {
 
 	// Insert the new season
 	_, err = tx.Exec(
-		`INSERT INTO seasons (id, name, is_active, created_at, registration_token) 
-		VALUES (?, ?, ?, ?, ?)`,
-		season.ID, season.Name, season.IsActive, season.CreatedAt, season.RegistrationToken,
+		`INSERT INTO seasons (id, name, is_active, created_at, registration_token, spring_registration_enabled) 
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		season.ID, season.Name, season.IsActive, season.CreatedAt, season.RegistrationToken, season.SpringRegistrationEnabled,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save season: %w", err)
@@ -181,9 +181,9 @@ func (db *Database) GetSeason(id string) (*Season, bool, error) {
 	season := &Season{}
 	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE id = ?`,
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled FROM seasons WHERE id = ?`,
 		id,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken)
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -208,9 +208,9 @@ func (db *Database) GetSeasonByRegistrationToken(token string) (*Season, bool, e
 	season := &Season{}
 	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE registration_token = ?`,
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled FROM seasons WHERE registration_token = ?`,
 		token,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken)
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -235,8 +235,8 @@ func (db *Database) GetActiveSeason() (*Season, bool, error) {
 	season := &Season{}
 	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE is_active = 1`,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken)
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled FROM seasons WHERE is_active = 1`,
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -299,13 +299,103 @@ func (db *Database) SetActiveSeason(seasonID string) error {
 	return nil
 }
 
+// CopySpringRegistrations copies registrations from one season to another for those who opted for spring
+func (db *Database) CopySpringRegistrations(fromSeasonID, toSeasonID string) error {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	// Query for all registrations that opted for spring in the source season
+	rows, err := db.db.Query(
+		`SELECT first_name, last_name, grade, teacher, gender, tshirt_size,
+			parent_first_name, parent_last_name, parent_contact_number, backup_contact_number, 
+			parent_email, dismissal_method, allergies, medical_info
+		FROM registrations 
+		WHERE season_id = ? AND register_for_spring = 1`,
+		fromSeasonID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to query spring registrations: %w", err)
+	}
+	defer rows.Close()
+
+	// Begin transaction for inserting new registrations
+	tx, err := db.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Copy each registration to the new season
+	count := 0
+	for rows.Next() {
+		var firstName, lastName, grade, teacher, gender, tshirtSize string
+		var parentFirstName, parentLastName, parentContactNumber, backupContactNumber string
+		var parentEmail, dismissalMethod, allergies, medicalInfo string
+
+		err := rows.Scan(
+			&firstName, &lastName, &grade, &teacher, &gender, &tshirtSize,
+			&parentFirstName, &parentLastName, &parentContactNumber, &backupContactNumber,
+			&parentEmail, &dismissalMethod, &allergies, &medicalInfo,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to scan registration row: %w", err)
+		}
+
+		// Increment grade level for spring season (if not already in 5th grade)
+		if grade != "5" {
+			switch grade {
+			case "K":
+				grade = "1"
+			case "1":
+				grade = "2"
+			case "2":
+				grade = "3"
+			case "3":
+				grade = "4"
+			case "4":
+				grade = "5"
+			}
+		}
+
+		// Create new registration for the target season
+		newID := uuid.New().String()
+		_, err = tx.Exec(
+			`INSERT INTO registrations (
+				id, season_id, first_name, last_name, grade, teacher, gender, tshirt_size,
+				parent_first_name, parent_last_name, parent_contact_number, backup_contact_number, 
+				parent_email, dismissal_method, allergies, medical_info, register_for_spring, registered_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+			newID, toSeasonID, firstName, lastName, grade, "", gender, tshirtSize,
+			parentFirstName, parentLastName, parentContactNumber, backupContactNumber,
+			parentEmail, dismissalMethod, allergies, medicalInfo, time.Now(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert copied registration: %w", err)
+		}
+		count++
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	log.Printf("Successfully copied %d spring registrations from season %s to %s", count, fromSeasonID, toSeasonID)
+	return nil
+}
+
 // GetAllSeasons returns all seasons
 func (db *Database) GetAllSeasons() ([]*Season, error) {
 	db.mutex.RLock()
 	defer db.mutex.RUnlock()
 
 	rows, err := db.db.Query(
-		`SELECT id, name, is_active, created_at, registration_token 
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled 
 		FROM seasons
 		ORDER BY created_at DESC`,
 	)
@@ -319,7 +409,7 @@ func (db *Database) GetAllSeasons() ([]*Season, error) {
 		season := &Season{}
 		var registrationToken sql.NullString
 		err := rows.Scan(
-			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken,
+			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan season row: %w", err)
@@ -346,11 +436,11 @@ func (db *Database) SaveRegistration(reg *Registration) error {
 		`INSERT INTO registrations (
 			id, season_id, first_name, last_name, grade, teacher, gender, tshirt_size,
 			parent_first_name, parent_last_name, parent_contact_number, backup_contact_number, parent_email, 
-			dismissal_method, allergies, medical_info, registered_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			dismissal_method, allergies, medical_info, register_for_spring, registered_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		reg.ID, reg.SeasonID, reg.FirstName, reg.LastName, reg.Grade, reg.Teacher, reg.Gender, reg.TshirtSize,
 		reg.ParentFirstName, reg.ParentLastName, reg.ParentContactNumber, reg.BackupContactNumber, reg.ParentEmail,
-		reg.DismissalMethod, reg.Allergies, reg.MedicalInfo, reg.RegisteredAt,
+		reg.DismissalMethod, reg.Allergies, reg.MedicalInfo, reg.RegisterForSpring, reg.RegisteredAt,
 	)
 
 	if err != nil {
@@ -380,13 +470,13 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 		`SELECT
 			r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender, r.tshirt_size,
 			r.parent_first_name, r.parent_last_name, r.parent_contact_number, r.backup_contact_number, r.parent_email, 
-			r.dismissal_method, r.allergies, r.medical_info, r.registered_at
+			r.dismissal_method, r.allergies, r.medical_info, r.register_for_spring, r.registered_at
 		FROM registrations r WHERE r.id = ?`,
 		id,
 	).Scan(
 		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull, &tshirtSizeNull,
 		&parentFirstNameNull, &parentLastNameNull, &reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
-		&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisteredAt,
+		&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisterForSpring, &reg.RegisteredAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -862,10 +952,10 @@ func (db *Database) RecordScan(registrationID string, trackID *string) (*ScanRec
 		var seasonRegToken sql.NullString
 		log.Printf("checking if season exists")
 		err = tx.QueryRow(
-			`SELECT id, name, is_active, created_at, registration_token FROM seasons WHERE id = ?`,
+			`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled FROM seasons WHERE id = ?`,
 			reg.SeasonID,
 		).Scan(
-			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &seasonRegToken,
+			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &seasonRegToken, &season.SpringRegistrationEnabled,
 		)
 
 		if err != nil && err != sql.ErrNoRows {

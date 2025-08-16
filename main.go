@@ -51,11 +51,12 @@ var users = map[string]struct {
 
 // Season represents a running season
 type Season struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	IsActive          bool      `json:"isActive"`
-	CreatedAt         time.Time `json:"createdAt"`
-	RegistrationToken string    `json:"registrationToken"`
+	ID                        string    `json:"id"`
+	Name                      string    `json:"name"`
+	IsActive                  bool      `json:"isActive"`
+	CreatedAt                 time.Time `json:"createdAt"`
+	RegistrationToken         string    `json:"registrationToken"`
+	SpringRegistrationEnabled bool      `json:"springRegistrationEnabled"`
 }
 
 // Registration represents a runner registration
@@ -77,6 +78,7 @@ type Registration struct {
 	Allergies           string    `json:"allergies"`
 	MedicalInfo         string    `json:"medicalInfo"`
 	RegisteredAt        time.Time `json:"registeredAt"`
+	RegisterForSpring   bool      `json:"registerForSpring"`
 	Season              *Season   `json:"season,omitempty"`
 }
 
@@ -135,6 +137,7 @@ type PageData struct {
 	CurrentPage      int
 	TotalPages       int
 	TotalRunners     int
+	PrefillData      map[string]string
 	RunnersPerPage   int
 	BaseURL          string
 	Stats            *SeasonStats
@@ -597,6 +600,31 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			data.ActiveSeason = activeSeason
 		}
 
+		// Check if we have prefill data in session
+		prefillData := make(map[string]string)
+		if val, ok := session.Values["prefill_parentFirstName"].(string); ok {
+			prefillData["parentFirstName"] = val
+		}
+		if val, ok := session.Values["prefill_parentLastName"].(string); ok {
+			prefillData["parentLastName"] = val
+		}
+		if val, ok := session.Values["prefill_parentContactNumber"].(string); ok {
+			prefillData["parentContactNumber"] = val
+		}
+		if val, ok := session.Values["prefill_backupContactNumber"].(string); ok {
+			prefillData["backupContactNumber"] = val
+		}
+		if val, ok := session.Values["prefill_parentEmail"].(string); ok {
+			prefillData["parentEmail"] = val
+		}
+		if val, ok := session.Values["prefill_dismissalMethod"].(string); ok {
+			prefillData["dismissalMethod"] = val
+		}
+		
+		if len(prefillData) > 0 {
+			data.PrefillData = prefillData
+		}
+
 		renderTemplate(w, "register", data)
 		return
 	}
@@ -647,6 +675,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			DismissalMethod:     r.FormValue("dismissalMethod"),
 			Allergies:           r.FormValue("allergies"),
 			MedicalInfo:         r.FormValue("medicalInfo"),
+			RegisterForSpring:   r.FormValue("registerForSpring") == "true",
 			RegisteredAt:        time.Now(),
 			Season:              activeSeason,
 		}
@@ -658,6 +687,15 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to save registration", http.StatusInternalServerError)
 			return
 		}
+
+		// Store parent data in session for next registration
+		session.Values["prefill_parentFirstName"] = reg.ParentFirstName
+		session.Values["prefill_parentLastName"] = reg.ParentLastName
+		session.Values["prefill_parentContactNumber"] = reg.ParentContactNumber
+		session.Values["prefill_backupContactNumber"] = reg.BackupContactNumber
+		session.Values["prefill_parentEmail"] = reg.ParentEmail
+		session.Values["prefill_dismissalMethod"] = reg.DismissalMethod
+		session.Save(r, w)
 
 		// Redirect to success page
 		http.Redirect(w, r, fmt.Sprintf("/success?id=%s", reg.ID), http.StatusSeeOther)
@@ -775,13 +813,16 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Determine if it should be active
 		isActive := r.FormValue("is_active") == "true"
+		springRegistrationEnabled := r.FormValue("spring_registration_enabled") == "true"
+		copyFromSeasonID := r.FormValue("copy_from_season")
 
 		// Create the season
 		season := &Season{
-			ID:        uuid.New().String(),
-			Name:      seasonName,
-			IsActive:  isActive,
-			CreatedAt: time.Now(),
+			ID:                        uuid.New().String(),
+			Name:                      seasonName,
+			IsActive:                  isActive,
+			SpringRegistrationEnabled: springRegistrationEnabled,
+			CreatedAt:                 time.Now(),
 		}
 
 		// Save the season
@@ -790,6 +831,15 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Error saving season: %v", err)
 			http.Error(w, "Failed to save season", http.StatusInternalServerError)
 			return
+		}
+
+		// If copying from another season, copy runners who opted for spring
+		if copyFromSeasonID != "" {
+			err = database.CopySpringRegistrations(copyFromSeasonID, season.ID)
+			if err != nil {
+				log.Printf("Error copying spring registrations: %v", err)
+				// Don't fail the whole operation, just log the error
+			}
 		}
 
 		// Redirect back to seasons page
@@ -1313,7 +1363,7 @@ func processCsvFile(file io.Reader, season *Season) (successCount, errorCount in
 		}
 
 		// Validate dismissal method
-		validDismissalMethods := map[string]bool{"Walking unescorted": true, "Picked up by adult": true, "Clayton Crew": true}
+		validDismissalMethods := map[string]bool{"Walking Unescorted": true, "Walking Escorted": true, "Car Pickup": true, "Clayton Crew": true}
 		if !validDismissalMethods[dismissalMethod] {
 			errors = append(errors, fmt.Sprintf("Line %d: Invalid dismissal method '%s'", lineNum, dismissalMethod))
 			errorCount++
@@ -1591,6 +1641,8 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// For GET requests, show the form
 	if r.Method == http.MethodGet {
+		session, _ := store.Get(r, "run-club-public-session")
+		
 		data := PageData{
 			Title:        fmt.Sprintf("Run Club - Register for %s", season.Name),
 			ActiveSeason: season,
@@ -1598,6 +1650,32 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			User: "",
 			Role: "",
 		}
+		
+		// Check if we have prefill data in session
+		prefillData := make(map[string]string)
+		if val, ok := session.Values["prefill_parentFirstName"].(string); ok {
+			prefillData["parentFirstName"] = val
+		}
+		if val, ok := session.Values["prefill_parentLastName"].(string); ok {
+			prefillData["parentLastName"] = val
+		}
+		if val, ok := session.Values["prefill_parentContactNumber"].(string); ok {
+			prefillData["parentContactNumber"] = val
+		}
+		if val, ok := session.Values["prefill_backupContactNumber"].(string); ok {
+			prefillData["backupContactNumber"] = val
+		}
+		if val, ok := session.Values["prefill_parentEmail"].(string); ok {
+			prefillData["parentEmail"] = val
+		}
+		if val, ok := session.Values["prefill_dismissalMethod"].(string); ok {
+			prefillData["dismissalMethod"] = val
+		}
+		
+		if len(prefillData) > 0 {
+			data.PrefillData = prefillData
+		}
+		
 		renderTemplate(w, "register", data)
 		return
 	}
@@ -1642,6 +1720,7 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			DismissalMethod:     r.FormValue("dismissalMethod"),
 			Allergies:           r.FormValue("allergies"),
 			MedicalInfo:         r.FormValue("medicalInfo"),
+			RegisterForSpring:   r.FormValue("registerForSpring") == "true",
 			RegisteredAt:        time.Now(),
 			Season:              season,
 		}
@@ -1653,6 +1732,16 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to save registration", http.StatusInternalServerError)
 			return
 		}
+
+		// Store parent data in session for next registration
+		session, _ := store.Get(r, "run-club-public-session")
+		session.Values["prefill_parentFirstName"] = reg.ParentFirstName
+		session.Values["prefill_parentLastName"] = reg.ParentLastName
+		session.Values["prefill_parentContactNumber"] = reg.ParentContactNumber
+		session.Values["prefill_backupContactNumber"] = reg.BackupContactNumber
+		session.Values["prefill_parentEmail"] = reg.ParentEmail
+		session.Values["prefill_dismissalMethod"] = reg.DismissalMethod
+		session.Save(r, w)
 
 		// Redirect to public success page with token
 		http.Redirect(w, r, fmt.Sprintf("/public/success?id=%s&token=%s", reg.ID, token), http.StatusSeeOther)

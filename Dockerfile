@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o runclub .
 FROM alpine:latest
 
 # Install sqlite for debugging
-RUN apk add --no-cache sqliteok how
+RUN apk add --no-cache sqlite
 
 # Copy application binary from builder stage
 COPY --from=builder /app/runclub /usr/local/bin/
