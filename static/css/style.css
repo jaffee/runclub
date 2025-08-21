@@ -537,6 +537,19 @@ textarea {
     width: auto;
 }
 
+form[disabled] {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+form[disabled] input,
+form[disabled] select,
+form[disabled] textarea,
+form[disabled] button {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+}
+
 .stats-table {
     width: 100%;
     border-collapse: collapse;

@@ -79,6 +79,11 @@
                         <input type="checkbox" id="is_active" name="is_active" value="true">
                     </div>
                     <div class="form-group">
+                        <label for="registration_starts_at">Registration Opens On (Central Time):</label>
+                        <input type="datetime-local" id="registration_starts_at" name="registration_starts_at">
+                        <small style="display: block; margin-top: 5px; color: #666;">Leave blank to open registration immediately. Time will be interpreted as Central Time (CT/CDT).</small>
+                    </div>
+                    <div class="form-group">
                         <label for="spring_registration_enabled">Enable "Also register for Spring season" option:</label>
                         <input type="checkbox" id="spring_registration_enabled" name="spring_registration_enabled" value="true">
                     </div>
@@ -103,6 +108,13 @@
                         <div class="season {{if .IsActive}}current{{end}}">
                             <h3>{{.Name}}</h3>
                             <p>Created on: {{.CreatedAt.Format "Jan 02, 2006"}}</p>
+                            {{if .RegistrationStartsAt}}
+                                {{if not .IsRegistrationOpen}}
+                                    <p style="color: #e74c3c; font-weight: bold;">Registration opens: {{.RegistrationStartsAt.Format "Jan 02, 2006 at 3:04 PM MST"}}</p>
+                                {{else}}
+                                    <p style="color: #27ae60;">Registration opened: {{.RegistrationStartsAt.Format "Jan 02, 2006 at 3:04 PM MST"}}</p>
+                                {{end}}
+                            {{end}}
                             {{if .SpringRegistrationEnabled}}
                                 <p class="info-badge">Spring registration enabled</p>
                             {{end}}

@@ -17,10 +17,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/felixge/fgprof"
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
+	"github.com/pkg/errors"
 )
 
 // User roles
@@ -51,12 +53,22 @@ var users = map[string]struct {
 
 // Season represents a running season
 type Season struct {
-	ID                        string    `json:"id"`
-	Name                      string    `json:"name"`
-	IsActive                  bool      `json:"isActive"`
-	CreatedAt                 time.Time `json:"createdAt"`
-	RegistrationToken         string    `json:"registrationToken"`
-	SpringRegistrationEnabled bool      `json:"springRegistrationEnabled"`
+	ID                        string     `json:"id"`
+	Name                      string     `json:"name"`
+	IsActive                  bool       `json:"isActive"`
+	CreatedAt                 time.Time  `json:"createdAt"`
+	RegistrationToken         string     `json:"registrationToken"`
+	SpringRegistrationEnabled bool       `json:"springRegistrationEnabled"`
+	RegistrationStartsAt      *time.Time `json:"registrationStartsAt"`
+}
+
+// IsRegistrationOpen checks if registration is currently open for this season
+func (s *Season) IsRegistrationOpen() bool {
+	if s.RegistrationStartsAt == nil {
+		// If no start date is set, registration is open
+		return true
+	}
+	return time.Now().After(*s.RegistrationStartsAt)
 }
 
 // Registration represents a runner registration
@@ -138,6 +150,8 @@ type PageData struct {
 	TotalPages       int
 	TotalRunners     int
 	PrefillData      map[string]string
+	RegistrationLink string
+	RegistrationOpen bool
 	RunnersPerPage   int
 	BaseURL          string
 	Stats            *SeasonStats
@@ -244,6 +258,7 @@ func main() {
 	// Public registration endpoints (no auth required)
 	http.HandleFunc("/public/register", loggingMiddleware(publicRegisterHandler))
 	http.HandleFunc("/public/success", loggingMiddleware(publicSuccessHandler))
+	http.HandleFunc("/info", loggingMiddleware(infoHandler))
 
 	// Debug endpoints (pprof is automatically registered by importing _ "net/http/pprof")
 	// This adds: /debug/pprof/, /debug/pprof/cmdline, /debug/pprof/profile, /debug/pprof/symbol, /debug/pprof/trace
@@ -313,7 +328,7 @@ func loadTemplates() {
 	}
 
 	// Load each template
-	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "tracks", "csv_upload", "runners", "badges", "stats"}
+	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "tracks", "csv_upload", "runners", "badges", "stats", "info"}
 	for _, name := range templateFiles {
 		tmpl, err := template.New(name + ".html").Funcs(funcMap).ParseFiles(fmt.Sprintf("templates/%s.html", name))
 		if err != nil {
@@ -558,7 +573,7 @@ func validatePhoneNumber(phone string) bool {
 	if len(phone) != 12 {
 		return false
 	}
-	
+
 	// Check format XXX-XXX-XXXX
 	for i, ch := range phone {
 		switch i {
@@ -572,7 +587,7 @@ func validatePhoneNumber(phone string) bool {
 			}
 		}
 	}
-	
+
 	return true
 }
 
@@ -598,6 +613,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		// Add active season data if available
 		if hasActiveSeason {
 			data.ActiveSeason = activeSeason
+			data.RegistrationOpen = activeSeason.IsRegistrationOpen()
 		}
 
 		// Check if we have prefill data in session
@@ -620,7 +636,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		if val, ok := session.Values["prefill_dismissalMethod"].(string); ok {
 			prefillData["dismissalMethod"] = val
 		}
-		
+
 		if len(prefillData) > 0 {
 			data.PrefillData = prefillData
 		}
@@ -637,6 +653,12 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Check if registration is open
+		if !activeSeason.IsRegistrationOpen() {
+			http.Error(w, "Registration is not yet open for this season", http.StatusBadRequest)
+			return
+		}
+
 		// Parse form data
 		err := r.ParseForm()
 		if err != nil {
@@ -650,7 +672,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid parent/guardian contact number. Please use format: 123-456-7890", http.StatusBadRequest)
 			return
 		}
-		
+
 		backupPhone := r.FormValue("backupContactNumber")
 		if backupPhone != "" && !validatePhoneNumber(backupPhone) {
 			http.Error(w, "Invalid backup contact number. Please use format: 123-456-7890", http.StatusBadRequest)
@@ -816,12 +838,29 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 		springRegistrationEnabled := r.FormValue("spring_registration_enabled") == "true"
 		copyFromSeasonID := r.FormValue("copy_from_season")
 
+		// Parse registration start date if provided (assume Central timezone)
+		var registrationStartsAt *time.Time
+		if regStartStr := r.FormValue("registration_starts_at"); regStartStr != "" {
+			// Use Central timezone for Clayton Elementary (Chicago area)
+			loc, err := time.LoadLocation("America/Chicago")
+			if err != nil {
+				http.Error(w, errors.Wrap(err, "loading location").Error(), 500)
+			}
+			if parsedTime, err := time.ParseInLocation("2006-01-02T15:04", regStartStr, loc); err == nil {
+				registrationStartsAt = &parsedTime
+			} else {
+				http.Error(w, errors.Wrap(err, "parsing time").Error(), 400)
+			}
+
+		}
+
 		// Create the season
 		season := &Season{
 			ID:                        uuid.New().String(),
 			Name:                      seasonName,
 			IsActive:                  isActive,
 			SpringRegistrationEnabled: springRegistrationEnabled,
+			RegistrationStartsAt:      registrationStartsAt,
 			CreatedAt:                 time.Now(),
 		}
 
@@ -1642,15 +1681,16 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// For GET requests, show the form
 	if r.Method == http.MethodGet {
 		session, _ := store.Get(r, "run-club-public-session")
-		
+
 		data := PageData{
-			Title:        fmt.Sprintf("Run Club - Register for %s", season.Name),
-			ActiveSeason: season,
+			Title:            fmt.Sprintf("Run Club - Register for %s", season.Name),
+			ActiveSeason:     season,
+			RegistrationOpen: season.IsRegistrationOpen(),
 			// For public registration, we don't have a logged-in user
 			User: "",
 			Role: "",
 		}
-		
+
 		// Check if we have prefill data in session
 		prefillData := make(map[string]string)
 		if val, ok := session.Values["prefill_parentFirstName"].(string); ok {
@@ -1671,17 +1711,23 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 		if val, ok := session.Values["prefill_dismissalMethod"].(string); ok {
 			prefillData["dismissalMethod"] = val
 		}
-		
+
 		if len(prefillData) > 0 {
 			data.PrefillData = prefillData
 		}
-		
+
 		renderTemplate(w, "register", data)
 		return
 	}
 
 	// For POST requests, process the form submission
 	if r.Method == http.MethodPost {
+		// Check if registration is open
+		if !season.IsRegistrationOpen() {
+			http.Error(w, "Registration is not yet open for this season", http.StatusBadRequest)
+			return
+		}
+
 		// Parse form data
 		err := r.ParseForm()
 		if err != nil {
@@ -1695,7 +1741,7 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid parent/guardian contact number. Please use format: 123-456-7890", http.StatusBadRequest)
 			return
 		}
-		
+
 		backupPhone := r.FormValue("backupContactNumber")
 		if backupPhone != "" && !validatePhoneNumber(backupPhone) {
 			http.Error(w, "Invalid backup contact number. Please use format: 123-456-7890", http.StatusBadRequest)
@@ -1750,6 +1796,28 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Method not allowed for other HTTP methods
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// infoHandler shows public information page about Run Club
+func infoHandler(w http.ResponseWriter, r *http.Request) {
+	// Get active season for registration link
+	activeSeason, hasActiveSeason, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	data := PageData{
+		Title: "Clayton Run Club - Information",
+	}
+
+	// If there's an active season, add the registration link and status
+	if hasActiveSeason && activeSeason != nil {
+		data.ActiveSeason = activeSeason
+		data.RegistrationOpen = activeSeason.IsRegistrationOpen()
+		data.RegistrationLink = fmt.Sprintf("/public/register?token=%s", activeSeason.RegistrationToken)
+	}
+
+	renderTemplate(w, "info", data)
 }
 
 // publicSuccessHandler shows success page for public registrations

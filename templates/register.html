@@ -27,11 +27,22 @@
         <div class="form-container">
             <h2>Registration Form</h2>
             {{ if .ActiveSeason }}
-            <p>Enter student information to generate a Run Club ID for the <strong>{{ .ActiveSeason.Name }}</strong> season</p>
+                {{ if not .RegistrationOpen }}
+                <div class="error-message" style="background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <strong>Registration is not yet open for {{ .ActiveSeason.Name }}</strong><br>
+                    {{ if .ActiveSeason.RegistrationStartsAt }}
+                    Registration will open on <strong>{{ .ActiveSeason.RegistrationStartsAt.Format "Monday, January 2, 2006 at 3:04 PM MST" }}</strong>
+                    {{ else }}
+                    Registration will open soon. Please check back later.
+                    {{ end }}
+                </div>
+                {{ else }}
+                <p>Enter student information to generate a Run Club ID for the <strong>{{ .ActiveSeason.Name }}</strong> season</p>
+                {{ end }}
             {{ else }}
             <p class="error-message">No active season. Please create and activate a season before registering runners.</p>
             {{ end }}
-            <form id="register-form" action="{{ if .User }}/register{{ else }}/public/register?token={{ .ActiveSeason.RegistrationToken }}{{ end }}" method="post" {{ if not .ActiveSeason }}disabled{{ end }}>
+            <form id="register-form" action="{{ if .User }}/register{{ else }}/public/register?token={{ .ActiveSeason.RegistrationToken }}{{ end }}" method="post" {{ if or (not .ActiveSeason) (not .RegistrationOpen) }}disabled{{ end }}>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="firstName">Student First Name:</label>
