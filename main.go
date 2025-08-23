@@ -73,25 +73,27 @@ func (s *Season) IsRegistrationOpen() bool {
 
 // Registration represents a runner registration
 type Registration struct {
-	ID                  string    `json:"id"`
-	SeasonID            *string   `json:"seasonId"`
-	FirstName           string    `json:"firstName"`
-	LastName            string    `json:"lastName"`
-	Grade               string    `json:"grade"`
-	Teacher             string    `json:"teacher"`
-	Gender              string    `json:"gender"`
-	TshirtSize          string    `json:"tshirtSize"`
-	ParentFirstName     string    `json:"parentFirstName"`
-	ParentLastName      string    `json:"parentLastName"`
-	ParentContactNumber string    `json:"parentContactNumber"`
-	BackupContactNumber string    `json:"backupContactNumber"`
-	ParentEmail         string    `json:"parentEmail"`
-	DismissalMethod     string    `json:"dismissalMethod"`
-	Allergies           string    `json:"allergies"`
-	MedicalInfo         string    `json:"medicalInfo"`
-	RegisteredAt        time.Time `json:"registeredAt"`
-	RegisterForSpring   bool      `json:"registerForSpring"`
-	Season              *Season   `json:"season,omitempty"`
+	ID                    string    `json:"id"`
+	SeasonID              *string   `json:"seasonId"`
+	FirstName             string    `json:"firstName"`
+	LastName              string    `json:"lastName"`
+	Grade                 string    `json:"grade"`
+	Teacher               string    `json:"teacher"`
+	Gender                string    `json:"gender"`
+	TshirtSize            string    `json:"tshirtSize"`
+	ParentFirstName       string    `json:"parentFirstName"`
+	ParentLastName        string    `json:"parentLastName"`
+	ParentContactNumber   string    `json:"parentContactNumber"`
+	BackupContactNumber   string    `json:"backupContactNumber"`
+	ParentEmail           string    `json:"parentEmail"`
+	DismissalMethod       string    `json:"dismissalMethod"`
+	Allergies             string    `json:"allergies"`
+	MedicalInfo           string    `json:"medicalInfo"`
+	RegisteredAt          time.Time `json:"registeredAt"`
+	RegisterForSpring     bool      `json:"registerForSpring"`
+	OptOutWebsiteDisplay  bool      `json:"optOutWebsiteDisplay"`
+	OptOutPhotoSharing    bool      `json:"optOutPhotoSharing"`
+	Season                *Season   `json:"season,omitempty"`
 }
 
 // Track represents a running track/route
@@ -248,6 +250,7 @@ func main() {
 	http.HandleFunc("/csv-upload", loggingMiddleware(authMiddleware(csvUploadHandler, []string{RoleAdmin})))
 	http.HandleFunc("/runners", loggingMiddleware(authMiddleware(runnersHandler, []string{RoleAdmin})))
 	http.HandleFunc("/runners/export", loggingMiddleware(authMiddleware(runnersExportHandler, []string{RoleAdmin})))
+	http.HandleFunc("/runner/", loggingMiddleware(authMiddleware(runnerDetailHandler, []string{RoleAdmin})))
 	http.HandleFunc("/badges", loggingMiddleware(authMiddleware(badgesHandler, []string{RoleAdmin})))
 
 	// API endpoints
@@ -328,7 +331,7 @@ func loadTemplates() {
 	}
 
 	// Load each template
-	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "tracks", "csv_upload", "runners", "badges", "stats", "info"}
+	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "tracks", "csv_upload", "runners", "badges", "stats", "info", "runner_detail"}
 	for _, name := range templateFiles {
 		tmpl, err := template.New(name + ".html").Funcs(funcMap).ParseFiles(fmt.Sprintf("templates/%s.html", name))
 		if err != nil {
@@ -692,14 +695,16 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			ParentFirstName:     r.FormValue("parentFirstName"),
 			ParentLastName:      r.FormValue("parentLastName"),
 			ParentContactNumber: r.FormValue("parentContactNumber"),
-			BackupContactNumber: r.FormValue("backupContactNumber"),
-			ParentEmail:         r.FormValue("parentEmail"),
-			DismissalMethod:     r.FormValue("dismissalMethod"),
-			Allergies:           r.FormValue("allergies"),
-			MedicalInfo:         r.FormValue("medicalInfo"),
-			RegisterForSpring:   r.FormValue("registerForSpring") == "true",
-			RegisteredAt:        time.Now(),
-			Season:              activeSeason,
+			BackupContactNumber:  r.FormValue("backupContactNumber"),
+			ParentEmail:          r.FormValue("parentEmail"),
+			DismissalMethod:      r.FormValue("dismissalMethod"),
+			Allergies:            r.FormValue("allergies"),
+			MedicalInfo:          r.FormValue("medicalInfo"),
+			RegisterForSpring:    r.FormValue("registerForSpring") == "true",
+			OptOutWebsiteDisplay: r.FormValue("optOutWebsiteDisplay") == "true",
+			OptOutPhotoSharing:   r.FormValue("optOutPhotoSharing") == "true",
+			RegisteredAt:         time.Now(),
+			Season:               activeSeason,
 		}
 
 		// Save the registration to the database
@@ -1584,6 +1589,49 @@ func runnersExportHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func runnerDetailHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "run-club-session")
+	username := session.Values["username"].(string)
+	role := session.Values["role"].(string)
+
+	// Get runner ID from URL path
+	path := r.URL.Path
+	parts := strings.Split(path, "/")
+	if len(parts) != 3 || parts[2] == "" {
+		http.Error(w, "Invalid runner ID", http.StatusBadRequest)
+		return
+	}
+	runnerID := parts[2]
+
+	// Get runner details from database
+	runner, exists, err := database.GetRegistration(runnerID)
+	if err != nil {
+		log.Printf("Error getting runner details: %v", err)
+		http.Error(w, "Failed to retrieve runner details", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Runner not found", http.StatusNotFound)
+		return
+	}
+
+	// Get active season
+	activeSeason, _, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	data := PageData{
+		Title:         fmt.Sprintf("Run Club - %s %s", runner.FirstName, runner.LastName),
+		User:          username,
+		Role:          role,
+		ActiveSeason:  activeSeason,
+		Registration:  runner,
+	}
+
+	renderTemplate(w, "runner_detail", data)
+}
+
 func badgesHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "run-club-session")
 	username := session.Values["username"].(string)
@@ -1761,14 +1809,16 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			ParentFirstName:     r.FormValue("parentFirstName"),
 			ParentLastName:      r.FormValue("parentLastName"),
 			ParentContactNumber: r.FormValue("parentContactNumber"),
-			BackupContactNumber: r.FormValue("backupContactNumber"),
-			ParentEmail:         r.FormValue("parentEmail"),
-			DismissalMethod:     r.FormValue("dismissalMethod"),
-			Allergies:           r.FormValue("allergies"),
-			MedicalInfo:         r.FormValue("medicalInfo"),
-			RegisterForSpring:   r.FormValue("registerForSpring") == "true",
-			RegisteredAt:        time.Now(),
-			Season:              season,
+			BackupContactNumber:  r.FormValue("backupContactNumber"),
+			ParentEmail:          r.FormValue("parentEmail"),
+			DismissalMethod:      r.FormValue("dismissalMethod"),
+			Allergies:            r.FormValue("allergies"),
+			MedicalInfo:          r.FormValue("medicalInfo"),
+			RegisterForSpring:    r.FormValue("registerForSpring") == "true",
+			OptOutWebsiteDisplay: r.FormValue("optOutWebsiteDisplay") == "true",
+			OptOutPhotoSharing:   r.FormValue("optOutPhotoSharing") == "true",
+			RegisteredAt:         time.Now(),
+			Season:               season,
 		}
 
 		// Save the registration to the database

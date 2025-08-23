@@ -308,7 +308,7 @@ func (db *Database) CopySpringRegistrations(fromSeasonID, toSeasonID string) err
 	rows, err := db.db.Query(
 		`SELECT first_name, last_name, grade, teacher, gender, tshirt_size,
 			parent_first_name, parent_last_name, parent_contact_number, backup_contact_number, 
-			parent_email, dismissal_method, allergies, medical_info
+			parent_email, dismissal_method, allergies, medical_info, opt_out_website_display, opt_out_photo_sharing
 		FROM registrations 
 		WHERE season_id = ? AND register_for_spring = 1`,
 		fromSeasonID,
@@ -335,11 +335,12 @@ func (db *Database) CopySpringRegistrations(fromSeasonID, toSeasonID string) err
 		var firstName, lastName, grade, teacher, gender, tshirtSize string
 		var parentFirstName, parentLastName, parentContactNumber, backupContactNumber string
 		var parentEmail, dismissalMethod, allergies, medicalInfo string
+		var optOutWebsiteDisplay, optOutPhotoSharing sql.NullBool
 
 		err := rows.Scan(
 			&firstName, &lastName, &grade, &teacher, &gender, &tshirtSize,
 			&parentFirstName, &parentLastName, &parentContactNumber, &backupContactNumber,
-			&parentEmail, &dismissalMethod, &allergies, &medicalInfo,
+			&parentEmail, &dismissalMethod, &allergies, &medicalInfo, &optOutWebsiteDisplay, &optOutPhotoSharing,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to scan registration row: %w", err)
@@ -363,15 +364,23 @@ func (db *Database) CopySpringRegistrations(fromSeasonID, toSeasonID string) err
 
 		// Create new registration for the target season
 		newID := uuid.New().String()
+		optOut1 := false
+		if optOutWebsiteDisplay.Valid {
+			optOut1 = optOutWebsiteDisplay.Bool
+		}
+		optOut2 := false
+		if optOutPhotoSharing.Valid {
+			optOut2 = optOutPhotoSharing.Bool
+		}
 		_, err = tx.Exec(
 			`INSERT INTO registrations (
 				id, season_id, first_name, last_name, grade, teacher, gender, tshirt_size,
 				parent_first_name, parent_last_name, parent_contact_number, backup_contact_number, 
-				parent_email, dismissal_method, allergies, medical_info, register_for_spring, registered_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+				parent_email, dismissal_method, allergies, medical_info, register_for_spring, opt_out_website_display, opt_out_photo_sharing, registered_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
 			newID, toSeasonID, firstName, lastName, grade, "", gender, tshirtSize,
 			parentFirstName, parentLastName, parentContactNumber, backupContactNumber,
-			parentEmail, dismissalMethod, allergies, medicalInfo, time.Now(),
+			parentEmail, dismissalMethod, allergies, medicalInfo, optOut1, optOut2, time.Now(),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert copied registration: %w", err)
@@ -436,11 +445,11 @@ func (db *Database) SaveRegistration(reg *Registration) error {
 		`INSERT INTO registrations (
 			id, season_id, first_name, last_name, grade, teacher, gender, tshirt_size,
 			parent_first_name, parent_last_name, parent_contact_number, backup_contact_number, parent_email, 
-			dismissal_method, allergies, medical_info, register_for_spring, registered_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			dismissal_method, allergies, medical_info, register_for_spring, opt_out_website_display, opt_out_photo_sharing, registered_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		reg.ID, reg.SeasonID, reg.FirstName, reg.LastName, reg.Grade, reg.Teacher, reg.Gender, reg.TshirtSize,
 		reg.ParentFirstName, reg.ParentLastName, reg.ParentContactNumber, reg.BackupContactNumber, reg.ParentEmail,
-		reg.DismissalMethod, reg.Allergies, reg.MedicalInfo, reg.RegisterForSpring, reg.RegisteredAt,
+		reg.DismissalMethod, reg.Allergies, reg.MedicalInfo, reg.RegisterForSpring, reg.OptOutWebsiteDisplay, reg.OptOutPhotoSharing, reg.RegisteredAt,
 	)
 
 	if err != nil {
@@ -463,6 +472,8 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 	var medicalInfoNull sql.NullString
 	var parentFirstNameNull sql.NullString
 	var parentLastNameNull sql.NullString
+	var optOutWebsiteDisplayNull sql.NullBool
+	var optOutPhotoSharingNull sql.NullBool
 
 	// Query registration with season data
 	var tshirtSizeNull sql.NullString
@@ -470,13 +481,13 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 		`SELECT
 			r.id, r.season_id, r.first_name, r.last_name, r.grade, r.teacher, r.gender, r.tshirt_size,
 			r.parent_first_name, r.parent_last_name, r.parent_contact_number, r.backup_contact_number, r.parent_email, 
-			r.dismissal_method, r.allergies, r.medical_info, r.register_for_spring, r.registered_at
+			r.dismissal_method, r.allergies, r.medical_info, r.register_for_spring, r.opt_out_website_display, r.opt_out_photo_sharing, r.registered_at
 		FROM registrations r WHERE r.id = ?`,
 		id,
 	).Scan(
 		&reg.ID, &seasonID, &reg.FirstName, &reg.LastName, &reg.Grade, &reg.Teacher, &genderNull, &tshirtSizeNull,
 		&parentFirstNameNull, &parentLastNameNull, &reg.ParentContactNumber, &reg.BackupContactNumber, &reg.ParentEmail,
-		&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisterForSpring, &reg.RegisteredAt,
+		&dismissalMethodNull, &allergiesNull, &medicalInfoNull, &reg.RegisterForSpring, &optOutWebsiteDisplayNull, &optOutPhotoSharingNull, &reg.RegisteredAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -525,6 +536,18 @@ func (db *Database) GetRegistration(id string) (*Registration, bool, error) {
 		reg.MedicalInfo = medicalInfoNull.String
 	} else {
 		reg.MedicalInfo = ""
+	}
+
+	// Handle opt-out fields
+	if optOutWebsiteDisplayNull.Valid {
+		reg.OptOutWebsiteDisplay = optOutWebsiteDisplayNull.Bool
+	} else {
+		reg.OptOutWebsiteDisplay = false
+	}
+	if optOutPhotoSharingNull.Valid {
+		reg.OptOutPhotoSharing = optOutPhotoSharingNull.Bool
+	} else {
+		reg.OptOutPhotoSharing = false
 	}
 
 	// Set season ID if not null

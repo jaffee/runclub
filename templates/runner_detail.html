@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .runner-detail-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .detail-section {
+            margin-bottom: 30px;
+        }
+        .detail-section h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .detail-row {
+            display: flex;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: bold;
+            width: 200px;
+            color: #555;
+        }
+        .detail-value {
+            flex: 1;
+            color: #333;
+        }
+        .detail-value.empty {
+            color: #999;
+            font-style: italic;
+        }
+        .back-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .back-button:hover {
+            background: #2980b9;
+        }
+        .privacy-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .privacy-status.opted-out {
+            background: #ffe4e1;
+            color: #8b0000;
+        }
+        .privacy-status.opted-in {
+            background: #e1ffe1;
+            color: #006400;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="user-nav">
+            <div class="user-info">
+                <span class="username">{{ .User }}</span>
+                <span class="role-badge role-{{ .Role }}">{{ .Role }}</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+        
+        <div class="header">
+            <h1>Runner Details</h1>
+        </div>
+
+        <div class="runner-detail-container">
+            <a href="/runners" class="back-button">← Back to Runners List</a>
+            
+            {{ if .Registration }}
+            
+            <div class="detail-section">
+                <h2>Student Information</h2>
+                <div class="detail-row">
+                    <div class="detail-label">ID:</div>
+                    <div class="detail-value">{{ .Registration.ID }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">First Name:</div>
+                    <div class="detail-value">{{ .Registration.FirstName }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Last Name:</div>
+                    <div class="detail-value">{{ .Registration.LastName }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Grade:</div>
+                    <div class="detail-value">{{ .Registration.Grade }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Teacher:</div>
+                    <div class="detail-value">{{ if .Registration.Teacher }}{{ .Registration.Teacher }}{{ else }}<span class="empty">Not provided</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Gender:</div>
+                    <div class="detail-value">{{ if .Registration.Gender }}{{ .Registration.Gender }}{{ else }}<span class="empty">Not provided</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">T-Shirt Size:</div>
+                    <div class="detail-value">{{ if .Registration.TshirtSize }}{{ .Registration.TshirtSize }}{{ else }}<span class="empty">Not provided</span>{{ end }}</div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h2>Parent/Guardian Information</h2>
+                <div class="detail-row">
+                    <div class="detail-label">Parent First Name:</div>
+                    <div class="detail-value">{{ if .Registration.ParentFirstName }}{{ .Registration.ParentFirstName }}{{ else }}<span class="empty">Not provided</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Parent Last Name:</div>
+                    <div class="detail-value">{{ if .Registration.ParentLastName }}{{ .Registration.ParentLastName }}{{ else }}<span class="empty">Not provided</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Contact Number:</div>
+                    <div class="detail-value">{{ .Registration.ParentContactNumber }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Backup Contact Number:</div>
+                    <div class="detail-value">{{ if .Registration.BackupContactNumber }}{{ .Registration.BackupContactNumber }}{{ else }}<span class="empty">Not provided</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Email Address:</div>
+                    <div class="detail-value">{{ .Registration.ParentEmail }}</div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h2>Additional Information</h2>
+                <div class="detail-row">
+                    <div class="detail-label">Dismissal Method:</div>
+                    <div class="detail-value">{{ if .Registration.DismissalMethod }}{{ .Registration.DismissalMethod }}{{ else }}<span class="empty">Not provided</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Allergies:</div>
+                    <div class="detail-value">{{ if .Registration.Allergies }}{{ .Registration.Allergies }}{{ else }}<span class="empty">None reported</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Medical Information:</div>
+                    <div class="detail-value">{{ if .Registration.MedicalInfo }}{{ .Registration.MedicalInfo }}{{ else }}<span class="empty">None reported</span>{{ end }}</div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h2>Registration Details</h2>
+                <div class="detail-row">
+                    <div class="detail-label">Season:</div>
+                    <div class="detail-value">{{ if .Registration.Season }}{{ .Registration.Season.Name }}{{ else }}<span class="empty">N/A</span>{{ end }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Registered At:</div>
+                    <div class="detail-value">{{ .Registration.RegisteredAt.Format "January 2, 2006 at 3:04 PM" }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Register for Spring:</div>
+                    <div class="detail-value">{{ if .Registration.RegisterForSpring }}Yes{{ else }}No{{ end }}</div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <h2>Privacy Preferences</h2>
+                <div class="detail-row">
+                    <div class="detail-label">Website/Leaderboard Display:</div>
+                    <div class="detail-value">
+                        {{ if .Registration.OptOutWebsiteDisplay }}
+                            <span class="privacy-status opted-out">Opted Out</span>
+                        {{ else }}
+                            <span class="privacy-status opted-in">Allowed</span>
+                        {{ end }}
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Photo Sharing:</div>
+                    <div class="detail-value">
+                        {{ if .Registration.OptOutPhotoSharing }}
+                            <span class="privacy-status opted-out">Opted Out</span>
+                        {{ else }}
+                            <span class="privacy-status opted-in">Allowed</span>
+                        {{ end }}
+                    </div>
+                </div>
+            </div>
+
+            {{ else }}
+            <p>Runner information not found.</p>
+            {{ end }}
+        </div>
+    </div>
+</body>
+</html>

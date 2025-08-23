@@ -64,6 +64,12 @@ sqlite3 /data/runclub.db
 .schema <tablename>
 ```
 
+## Setting up another deployment (e.g. for testing)
+1. Create a new fly.test2.toml or such with a different app name.
+2. fly apps create <new_app_name>
+3. fly volumes create data --size 1 --app <new_app_name> --region dfw
+4. fly deploy --config fly.test2.toml --app <new_app_name>
+
 
 ## Pages
 
