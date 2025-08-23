@@ -60,6 +60,7 @@ type Season struct {
 	RegistrationToken         string     `json:"registrationToken"`
 	SpringRegistrationEnabled bool       `json:"springRegistrationEnabled"`
 	RegistrationStartsAt      *time.Time `json:"registrationStartsAt"`
+	MaxRegistrations          int        `json:"maxRegistrations"`
 }
 
 // IsRegistrationOpen checks if registration is currently open for this season
@@ -69,6 +70,15 @@ func (s *Season) IsRegistrationOpen() bool {
 		return true
 	}
 	return time.Now().After(*s.RegistrationStartsAt)
+}
+
+// IsRegistrationFull checks if the season has reached max registrations
+func (s *Season) IsRegistrationFull(currentCount int) bool {
+	if s.MaxRegistrations <= 0 {
+		// If max is 0 or negative, there's no limit
+		return false
+	}
+	return currentCount >= s.MaxRegistrations
 }
 
 // Registration represents a runner registration
@@ -154,6 +164,8 @@ type PageData struct {
 	PrefillData      map[string]string
 	RegistrationLink string
 	RegistrationOpen bool
+	RegistrationFull bool
+	RegistrationCount int
 	RunnersPerPage   int
 	BaseURL          string
 	Stats            *SeasonStats
@@ -252,6 +264,7 @@ func main() {
 	http.HandleFunc("/runners/export", loggingMiddleware(authMiddleware(runnersExportHandler, []string{RoleAdmin})))
 	http.HandleFunc("/runner/", loggingMiddleware(authMiddleware(runnerDetailHandler, []string{RoleAdmin})))
 	http.HandleFunc("/badges", loggingMiddleware(authMiddleware(badgesHandler, []string{RoleAdmin})))
+	http.HandleFunc("/badges2x4", loggingMiddleware(authMiddleware(badges2x4Handler, []string{RoleAdmin})))
 
 	// API endpoints
 	http.HandleFunc("/api/registrations", loggingMiddleware(authMiddleware(apiRegistrationsHandler, []string{RoleAdmin})))
@@ -328,10 +341,13 @@ func loadTemplates() {
 		"urlquery": func(s string) string {
 			return url.QueryEscape(s)
 		},
+		"mod": func(a, b int) int {
+			return a % b
+		},
 	}
 
 	// Load each template
-	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "tracks", "csv_upload", "runners", "badges", "stats", "info", "runner_detail"}
+	templateFiles := []string{"home", "scan", "register", "success", "login", "seasons", "tracks", "csv_upload", "runners", "badges", "badges_2x4", "stats", "info", "runner_detail"}
 	for _, name := range templateFiles {
 		tmpl, err := template.New(name + ".html").Funcs(funcMap).ParseFiles(fmt.Sprintf("templates/%s.html", name))
 		if err != nil {
@@ -617,6 +633,15 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		if hasActiveSeason {
 			data.ActiveSeason = activeSeason
 			data.RegistrationOpen = activeSeason.IsRegistrationOpen()
+			
+			// Check registration capacity
+			count, err := database.GetRegistrationCountForSeason(activeSeason.ID)
+			if err != nil {
+				log.Printf("Error getting registration count: %v", err)
+			} else {
+				data.RegistrationCount = count
+				data.RegistrationFull = activeSeason.IsRegistrationFull(count)
+			}
 		}
 
 		// Check if we have prefill data in session
@@ -662,8 +687,20 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Check if registration is full
+		count, err := database.GetRegistrationCountForSeason(activeSeason.ID)
+		if err != nil {
+			log.Printf("Error getting registration count: %v", err)
+			http.Error(w, "Failed to check registration capacity", http.StatusInternalServerError)
+			return
+		}
+		if activeSeason.IsRegistrationFull(count) {
+			http.Error(w, "Registration is full for this season", http.StatusBadRequest)
+			return
+		}
+
 		// Parse form data
-		err := r.ParseForm()
+		err = r.ParseForm()
 		if err != nil {
 			http.Error(w, "Error parsing form", http.StatusBadRequest)
 			return
@@ -843,6 +880,14 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 		springRegistrationEnabled := r.FormValue("spring_registration_enabled") == "true"
 		copyFromSeasonID := r.FormValue("copy_from_season")
 
+		// Parse max registrations (default to 95)
+		maxRegistrations := 95
+		if maxRegStr := r.FormValue("max_registrations"); maxRegStr != "" {
+			if parsed, err := strconv.Atoi(maxRegStr); err == nil && parsed >= 0 {
+				maxRegistrations = parsed
+			}
+		}
+
 		// Parse registration start date if provided (assume Central timezone)
 		var registrationStartsAt *time.Time
 		if regStartStr := r.FormValue("registration_starts_at"); regStartStr != "" {
@@ -866,6 +911,7 @@ func seasonsHandler(w http.ResponseWriter, r *http.Request) {
 			IsActive:                  isActive,
 			SpringRegistrationEnabled: springRegistrationEnabled,
 			RegistrationStartsAt:      registrationStartsAt,
+			MaxRegistrations:          maxRegistrations,
 			CreatedAt:                 time.Now(),
 		}
 
@@ -1705,6 +1751,80 @@ func badgesHandler(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, "badges", data)
 }
 
+// badges2x4Handler handles the 2"x4" badge printing format
+func badges2x4Handler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "run-club-session")
+	username := session.Values["username"].(string)
+	role := session.Values["role"].(string)
+
+	// Get all seasons
+	seasons, err := database.GetAllSeasons()
+	if err != nil {
+		log.Printf("Error getting seasons: %v", err)
+		http.Error(w, "Failed to retrieve seasons", http.StatusInternalServerError)
+		return
+	}
+
+	// Get active season
+	activeSeason, hasActiveSeason, err := database.GetActiveSeason()
+	if err != nil {
+		log.Printf("Error getting active season: %v", err)
+	}
+
+	// Parse query parameters
+	seasonID := r.URL.Query().Get("season_id")
+
+	// Default to active season if no season_id is provided
+	if seasonID == "" && hasActiveSeason {
+		seasonID = activeSeason.ID
+	}
+
+	// Make sure we HTML-escape the search query for template safety
+	searchQuery := template.HTMLEscapeString(r.URL.Query().Get("search"))
+
+	pageStr := r.URL.Query().Get("page")
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	// Number of badges per page (10 badges per sheet: 2 columns × 5 rows)
+	runnersPerPage := 10
+
+	// Get filtered registrations with pagination
+	registrations, totalCount, err := database.GetFilteredRegistrations(seasonID, searchQuery, page, runnersPerPage)
+	if err != nil {
+		log.Printf("Error getting registrations: %v", err)
+		http.Error(w, "Failed to retrieve registrations", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate total pages
+	totalPages := (totalCount + runnersPerPage - 1) / runnersPerPage
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	data := PageData{
+		Title:            "Run Club - Print Badges (2x4)",
+		User:             username,
+		Role:             role,
+		Seasons:          seasons,
+		ActiveSeason:     activeSeason,
+		Registrations:    registrations,
+		SelectedSeasonID: seasonID,
+		SearchQuery:      searchQuery,
+		CurrentPage:      page,
+		TotalPages:       totalPages,
+		TotalRunners:     totalCount,
+		RunnersPerPage:   runnersPerPage,
+	}
+
+	renderTemplate(w, "badges_2x4", data)
+}
+
 // publicRegisterHandler handles public registration for a specific season
 func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// Get token from URL
@@ -1737,6 +1857,15 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			// For public registration, we don't have a logged-in user
 			User: "",
 			Role: "",
+		}
+		
+		// Check registration capacity
+		count, err := database.GetRegistrationCountForSeason(season.ID)
+		if err != nil {
+			log.Printf("Error getting registration count: %v", err)
+		} else {
+			data.RegistrationCount = count
+			data.RegistrationFull = season.IsRegistrationFull(count)
 		}
 
 		// Check if we have prefill data in session
@@ -1776,8 +1905,20 @@ func publicRegisterHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Check if registration is full
+		count, err := database.GetRegistrationCountForSeason(season.ID)
+		if err != nil {
+			log.Printf("Error getting registration count: %v", err)
+			http.Error(w, "Failed to check registration capacity", http.StatusInternalServerError)
+			return
+		}
+		if season.IsRegistrationFull(count) {
+			http.Error(w, "Registration is full for this season", http.StatusBadRequest)
+			return
+		}
+
 		// Parse form data
-		err := r.ParseForm()
+		err = r.ParseForm()
 		if err != nil {
 			http.Error(w, "Error parsing form", http.StatusBadRequest)
 			return

@@ -88,6 +88,11 @@
                         <input type="checkbox" id="spring_registration_enabled" name="spring_registration_enabled" value="true">
                     </div>
                     <div class="form-group">
+                        <label for="max_registrations">Maximum Registrations:</label>
+                        <input type="number" id="max_registrations" name="max_registrations" min="0" value="95" required>
+                        <small style="display: block; margin-top: 5px; color: #666;">Set to 0 for unlimited registrations. Default is 95.</small>
+                    </div>
+                    <div class="form-group">
                         <label for="copy_from_season">Copy runners from season (who opted for Spring):</label>
                         <select id="copy_from_season" name="copy_from_season">
                             <option value="">-- Don't copy runners --</option>
@@ -117,6 +122,11 @@
                             {{end}}
                             {{if .SpringRegistrationEnabled}}
                                 <p class="info-badge">Spring registration enabled</p>
+                            {{end}}
+                            {{if gt .MaxRegistrations 0}}
+                                <p>Max Registrations: {{.MaxRegistrations}}</p>
+                            {{else}}
+                                <p>Max Registrations: Unlimited</p>
                             {{end}}
                             {{if .IsActive}}
                                 <p class="active-badge">ACTIVE</p>

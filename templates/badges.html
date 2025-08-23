@@ -310,6 +310,7 @@
                     <button type="submit" class="submit-btn">Search</button>
                 </form>
                 <button onclick="window.print();" class="print-button">Print Badges</button>
+                <a href="/badges2x4?season_id={{.SelectedSeasonID}}&search={{.SearchQuery}}" class="print-button" style="background: #9b59b6; margin-left: 10px;">Switch to 2×4 Format</a>
                 <p>Total runners: {{.TotalRunners}}</p>
                 
                 {{if gt .TotalPages 1}}

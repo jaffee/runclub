@@ -36,13 +36,23 @@
                     Registration will open soon. Please check back later.
                     {{ end }}
                 </div>
+                {{ else if .RegistrationFull }}
+                <div class="error-message" style="background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <strong>Registration is Full for {{ .ActiveSeason.Name }}</strong><br>
+                    We have reached the maximum capacity of {{ .ActiveSeason.MaxRegistrations }} runners for this season.
+                    {{ if gt .ActiveSeason.MaxRegistrations 0 }}<br><small>({{ .RegistrationCount }}/{{ .ActiveSeason.MaxRegistrations }} registered)</small>{{ end }}
+                </div>
                 {{ else }}
-                <p>Enter student information to generate a Run Club ID for the <strong>{{ .ActiveSeason.Name }}</strong> season</p>
+                <p>Enter student information to register for the <strong>{{ .ActiveSeason.Name }}</strong> season.
+                {{ if gt .ActiveSeason.MaxRegistrations 0 }}
+                <br><small style="color: #666;">({{ .RegistrationCount }}/{{ .ActiveSeason.MaxRegistrations }} spots filled)</small>
+                {{ end }}
+                </p>
                 {{ end }}
             {{ else }}
             <p class="error-message">No active season. Please create and activate a season before registering runners.</p>
             {{ end }}
-            <form id="register-form" action="{{ if .User }}/register{{ else }}/public/register?token={{ .ActiveSeason.RegistrationToken }}{{ end }}" method="post" {{ if or (not .ActiveSeason) (not .RegistrationOpen) }}disabled{{ end }}>
+            <form id="register-form" action="{{ if .User }}/register{{ else }}/public/register?token={{ .ActiveSeason.RegistrationToken }}{{ end }}" method="post" {{ if or (not .ActiveSeason) (not .RegistrationOpen) .RegistrationFull }}disabled{{ end }}>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="firstName">Student First Name:</label>
@@ -163,7 +173,7 @@
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="registerForSpring" name="registerForSpring" value="true">
-                        Also register for Spring season
+                        Also register for Spring season (double your donation, no refunds)
                     </label>
                 </div>
                 {{ end }}
@@ -172,15 +182,21 @@
                     <h3 style="margin-top: 30px; margin-bottom: 15px;">Privacy Preferences</h3>
                     <label class="checkbox-label" style="display: block; margin-bottom: 10px;">
                         <input type="checkbox" id="optOutWebsiteDisplay" name="optOutWebsiteDisplay" value="true">
-                        Opt out of displaying student's data on website and leaderboards
+                        Opt out of displaying student's running data on this website
                     </label>
                     <label class="checkbox-label" style="display: block; margin-bottom: 15px;">
                         <input type="checkbox" id="optOutPhotoSharing" name="optOutPhotoSharing" value="true">
-                        Opt out of posting student photos
+                        Opt out of posting student photos (e.g. school bulletin board, newsletter)
                     </label>
                 </div>
                 
                 <div class="form-group">
+                    <div style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: #856404; font-size: 14px; line-height: 1.5;">
+                            <strong>⚠️ Important Medical Information:</strong><br>
+                            By submitting this form, I certify that I understand that run club volunteers will, at their discretion, perform minor first aid (alcohol wipes, bandaids, etc) for runners. Run club volunteers can <strong>not</strong> administer prescription medications such as epipens, inhalers, etc. If your child has medical needs beyond basic first aid, please make other arrangements.
+                        </p>
+                    </div>
                     <button type="submit" class="submit-btn">Register Runner</button>
                 </div>
             </form>

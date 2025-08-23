@@ -156,9 +156,9 @@ func (db *Database) SaveSeason(season *Season) error {
 
 	// Insert the new season
 	_, err = tx.Exec(
-		`INSERT INTO seasons (id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at) 
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		season.ID, season.Name, season.IsActive, season.CreatedAt, season.RegistrationToken, season.SpringRegistrationEnabled, season.RegistrationStartsAt,
+		`INSERT INTO seasons (id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at, max_registrations) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		season.ID, season.Name, season.IsActive, season.CreatedAt, season.RegistrationToken, season.SpringRegistrationEnabled, season.RegistrationStartsAt, season.MaxRegistrations,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save season: %w", err)
@@ -181,9 +181,9 @@ func (db *Database) GetSeason(id string) (*Season, bool, error) {
 	season := &Season{}
 	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at FROM seasons WHERE id = ?`,
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at, max_registrations FROM seasons WHERE id = ?`,
 		id,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt)
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt, &season.MaxRegistrations)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -208,9 +208,9 @@ func (db *Database) GetSeasonByRegistrationToken(token string) (*Season, bool, e
 	season := &Season{}
 	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at FROM seasons WHERE registration_token = ?`,
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at, max_registrations FROM seasons WHERE registration_token = ?`,
 		token,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt)
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt, &season.MaxRegistrations)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -235,8 +235,8 @@ func (db *Database) GetActiveSeason() (*Season, bool, error) {
 	season := &Season{}
 	var registrationToken sql.NullString
 	err := db.db.QueryRow(
-		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at FROM seasons WHERE is_active = 1`,
-	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt)
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at, max_registrations FROM seasons WHERE is_active = 1`,
+	).Scan(&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt, &season.MaxRegistrations)
 
 	if err == sql.ErrNoRows {
 		return nil, false, nil
@@ -404,7 +404,7 @@ func (db *Database) GetAllSeasons() ([]*Season, error) {
 	defer db.mutex.RUnlock()
 
 	rows, err := db.db.Query(
-		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at 
+		`SELECT id, name, is_active, created_at, registration_token, spring_registration_enabled, registration_starts_at, max_registrations 
 		FROM seasons
 		ORDER BY created_at DESC`,
 	)
@@ -418,7 +418,7 @@ func (db *Database) GetAllSeasons() ([]*Season, error) {
 		season := &Season{}
 		var registrationToken sql.NullString
 		err := rows.Scan(
-			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt,
+			&season.ID, &season.Name, &season.IsActive, &season.CreatedAt, &registrationToken, &season.SpringRegistrationEnabled, &season.RegistrationStartsAt, &season.MaxRegistrations,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan season row: %w", err)

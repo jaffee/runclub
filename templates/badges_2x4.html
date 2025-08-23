@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }}</title>
+    <style>
+        @media print {
+            @page {
+                size: 8.5in 11in;
+                margin: 0;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+                width: 8.5in;
+                height: 11in;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+            .print-page {
+                margin: 0;
+                padding: 0.5in 0.0625in;
+            }
+        }
+        
+        @media screen {
+            body {
+                background: #f0f0f0;
+                margin: 0;
+                padding: 20px;
+            }
+            .print-page {
+                background: white;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                margin: 0 auto 20px;
+                width: 8.5in;
+                height: 11in;
+                position: relative;
+            }
+            .no-print {
+                max-width: 8.5in;
+                margin: 0 auto 20px;
+            }
+        }
+        
+        /* Page layout for 8.5" x 11" paper */
+        .print-page {
+            width: 8.5in;
+            height: 11in;
+            position: relative;
+            padding: 0.5in 0.0625in; /* 0.5" top/bottom, 1/16" left/right */
+            box-sizing: border-box;
+        }
+        
+        /* Badge grid container */
+        .badges-grid {
+            display: grid;
+            grid-template-columns: 4in 0.1875in 4in; /* 2 columns of 4" with 3/16" gap */
+            grid-template-rows: repeat(5, 2in); /* 5 rows of 2" height */
+            gap: 0; /* No additional gap, using grid-template for spacing */
+            width: calc(4in + 0.1875in + 4in); /* Total width */
+            height: 10in; /* 5 rows × 2" = 10" */
+            margin: 0 auto;
+        }
+        
+        /* Individual badge */
+        .badge {
+            width: 4in;
+            height: 2in;
+            border: 1px solid #333;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: row;
+            padding: 0.05in; /* Reduced padding to keep content readable but maximize badge size */
+            position: relative;
+            background: white;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        /* Skip middle column cells */
+        .badge:nth-child(3n-1) {
+            display: none;
+        }
+        
+        /* Spacer for middle column */
+        .spacer {
+            width: 0.1875in;
+            height: 2in;
+        }
+        
+        /* Badge content layout */
+        .badge-content {
+            display: flex;
+            width: 100%;
+            gap: 0.1in;
+        }
+        
+        .badge-qr {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .badge-qr img {
+            width: 90px;
+            height: 90px;
+        }
+        
+        .grade-display {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #2c3e50;
+        }
+        
+        .badge-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: 11pt;
+            line-height: 1.3;
+        }
+        
+        .runner-name {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .runner-details {
+            font-size: 10pt;
+            margin: 2px 0;
+        }
+        
+        .contact-info {
+            font-size: 9pt;
+            margin: 2px 0;
+        }
+        
+        .contact-label {
+            font-weight: bold;
+        }
+        
+        .medical-info {
+            font-size: 9pt;
+            margin: 2px 0;
+            color: #d32f2f;
+        }
+        
+        .medical-label {
+            font-weight: bold;
+        }
+        
+        .season-info {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-top: 3px;
+        }
+        
+        .info-section {
+            margin-bottom: 3px;
+        }
+        
+        /* Control panel styling */
+        .no-print {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-group select,
+        .form-group input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .btn-print {
+            background: #27ae60;
+        }
+        
+        .btn-print:hover {
+            background: #229954;
+        }
+        
+        .format-link {
+            margin-left: auto;
+            padding: 10px 20px;
+            background: #9b59b6;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        
+        .format-link:hover {
+            background: #8e44ad;
+        }
+        
+        .pagination {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .page-link {
+            padding: 8px 12px;
+            background: #ecf0f1;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #2c3e50;
+        }
+        
+        .page-link.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        
+        .page-link:hover:not(.active) {
+            background: #d5dbdd;
+        }
+        
+        .info-text {
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <h1>Print Badges - 2" × 4" Format</h1>
+        <p class="info-text">10 badges per page (5 rows × 2 columns) on 8.5" × 11" paper</p>
+        
+        <div class="controls">
+            <form method="GET" action="/badges2x4" style="display: flex; gap: 15px; align-items: flex-end; flex: 1;">
+                <div class="form-group">
+                    <label for="season_id">Season:</label>
+                    <select name="season_id" id="season_id">
+                        <option value="">Select Season</option>
+                        {{range .Seasons}}
+                        <option value="{{.ID}}" {{if eq .ID $.SelectedSeasonID}}selected{{end}}>
+                            {{.Name}}{{if .IsActive}} (Active){{end}}
+                        </option>
+                        {{end}}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="search">Search:</label>
+                    <input type="text" name="search" id="search" value="{{.SearchQuery}}" placeholder="Name, grade, teacher...">
+                </div>
+                
+                <button type="submit" class="btn">Filter</button>
+                <button type="button" class="btn btn-print" onclick="window.print()">Print Page</button>
+            </form>
+            
+            <a href="/badges" class="format-link">Switch to 3×3 Format</a>
+        </div>
+        
+        {{if .TotalPages}}
+        {{if gt .TotalPages 1}}
+        <div class="pagination">
+            {{if gt .CurrentPage 1}}
+            <a href="/badges2x4?page={{subtract .CurrentPage 1}}&season_id={{.SelectedSeasonID}}&search={{urlquery .SearchQuery}}" class="page-link">Previous</a>
+            {{end}}
+            
+            <span>Page {{.CurrentPage}} of {{.TotalPages}}</span>
+            
+            {{if lt .CurrentPage .TotalPages}}
+            <a href="/badges2x4?page={{add .CurrentPage 1}}&season_id={{.SelectedSeasonID}}&search={{urlquery .SearchQuery}}" class="page-link">Next</a>
+            {{end}}
+        </div>
+        {{end}}
+        {{end}}
+    </div>
+    
+    {{if .Registrations}}
+    <div class="print-page">
+        <div class="badges-grid">
+            {{range $index, $reg := .Registrations}}
+            {{if eq (mod $index 2) 0}}
+            <!-- Left column badge -->
+            <div class="badge">
+                <div class="badge-content">
+                    <div class="badge-qr">
+                        <div class="grade-display">{{$reg.Grade}}</div>
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data={{$reg.ID}}" alt="QR Code">
+                    </div>
+                    <div class="badge-info">
+                        <div class="info-section">
+                            <div class="runner-name">{{$reg.FirstName}} {{$reg.LastName}}</div>
+                            {{if $reg.Teacher}}<div class="runner-details">Teacher: {{$reg.Teacher}}</div>{{end}}
+                        </div>
+                        <div class="info-section">
+                            <div class="contact-info"><span class="contact-label">Parent:</span> {{$reg.ParentContactNumber}}</div>
+                            {{if $reg.BackupContactNumber}}
+                            <div class="contact-info"><span class="contact-label">Backup:</span> {{$reg.BackupContactNumber}}</div>
+                            {{end}}
+                            <div class="contact-info"><span class="contact-label">Dismissal:</span> {{$reg.DismissalMethod}}</div>
+                        </div>
+                        {{if or $reg.Allergies $reg.MedicalInfo}}
+                        <div class="info-section">
+                            {{if $reg.Allergies}}
+                            <div class="medical-info"><span class="medical-label">⚠️ Allergies:</span> {{$reg.Allergies}}</div>
+                            {{end}}
+                            {{if $reg.MedicalInfo}}
+                            <div class="medical-info"><span class="medical-label">⚕️ Medical:</span> {{$reg.MedicalInfo}}</div>
+                            {{end}}
+                        </div>
+                        {{end}}
+                        <div class="season-info">{{if $reg.Season}}Run Club - {{$reg.Season.Name}}{{end}}</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Middle spacer -->
+            <div class="spacer"></div>
+            {{else}}
+            <!-- Right column badge -->
+            <div class="badge">
+                <div class="badge-content">
+                    <div class="badge-qr">
+                        <div class="grade-display">{{$reg.Grade}}</div>
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data={{$reg.ID}}" alt="QR Code">
+                    </div>
+                    <div class="badge-info">
+                        <div class="info-section">
+                            <div class="runner-name">{{$reg.FirstName}} {{$reg.LastName}}</div>
+                            {{if $reg.Teacher}}<div class="runner-details">Teacher: {{$reg.Teacher}}</div>{{end}}
+                        </div>
+                        <div class="info-section">
+                            <div class="contact-info"><span class="contact-label">Parent:</span> {{$reg.ParentContactNumber}}</div>
+                            {{if $reg.BackupContactNumber}}
+                            <div class="contact-info"><span class="contact-label">Backup:</span> {{$reg.BackupContactNumber}}</div>
+                            {{end}}
+                            <div class="contact-info"><span class="contact-label">Dismissal:</span> {{$reg.DismissalMethod}}</div>
+                        </div>
+                        {{if or $reg.Allergies $reg.MedicalInfo}}
+                        <div class="info-section">
+                            {{if $reg.Allergies}}
+                            <div class="medical-info"><span class="medical-label">⚠️ Allergies:</span> {{$reg.Allergies}}</div>
+                            {{end}}
+                            {{if $reg.MedicalInfo}}
+                            <div class="medical-info"><span class="medical-label">⚕️ Medical:</span> {{$reg.MedicalInfo}}</div>
+                            {{end}}
+                        </div>
+                        {{end}}
+                        <div class="season-info">{{if $reg.Season}}Run Club - {{$reg.Season.Name}}{{end}}</div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+            {{end}}
+            
+            <!-- Fill empty spots if less than 10 badges -->
+            {{$remainingBadges := subtract 10 (len .Registrations)}}
+            {{if gt $remainingBadges 0}}
+                {{range $i := sequence 1 $remainingBadges}}
+                {{$totalIndex := add (len $.Registrations) (subtract $i 1)}}
+                {{if eq (mod $totalIndex 2) 0}}
+                <!-- Empty left column badge -->
+                <div class="badge" style="border: 1px dashed #ccc; background: #fafafa;"></div>
+                <!-- Middle spacer -->
+                <div class="spacer"></div>
+                {{else}}
+                <!-- Empty right column badge -->
+                <div class="badge" style="border: 1px dashed #ccc; background: #fafafa;"></div>
+                {{end}}
+                {{end}}
+            {{end}}
+        </div>
+    </div>
+    {{else}}
+    <div class="no-print" style="text-align: center; padding: 40px;">
+        <p>No runners found. Please select a season or adjust your search criteria.</p>
+    </div>
+    {{end}}
+</body>
+</html>
